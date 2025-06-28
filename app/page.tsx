@@ -1,103 +1,243 @@
-import Image from "next/image";
+// app/page.tsx
+"use client"; // This page uses client-side hooks and browser APIs
 
-export default function Home() {
+import React, { useState, useRef, useEffect } from 'react';
+import Link from 'next/link';
+import Image from 'next/image'; // For displaying captured image preview
+import AnalysisResult from '../components/AnalysisResult'; // Assuming this component is in components/AnalysisResult.js
+
+export default function HomePage() {
+  const [showCamera, setShowCamera] = useState(false);
+  const [capturedImagePreviewUrl, setCapturedImagePreviewUrl] = useState<string | null>(null);
+  const [analysisResult, setAnalysisResult] = useState<any | null>(null);
+  const [loadingAnalysis, setLoadingAnalysis] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null); // Canvas for capturing frames
+
+  // Effect to manage camera stream when showCamera state changes
+  useEffect(() => {
+    if (showCamera) {
+      openCamera();
+    } else {
+      closeCamera();
+    }
+    // Cleanup function when component unmounts or showCamera becomes false
+    return () => {
+      closeCamera();
+    };
+  }, [showCamera]); // Re-run effect when showCamera changes
+
+  // Function to open the device camera and stream to video element
+  const openCamera = async () => {
+    setCapturedImagePreviewUrl(null); // Clear any previous captured image
+    setAnalysisResult(null); // Clear any previous analysis results
+    setError(null); // Clear previous errors
+
+    try {
+      // Request access to video stream (front camera preferred if available)
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user' } // 'user' for front camera, 'environment' for back
+      });
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        // Play the video once metadata is loaded (helps prevent issues on some browsers)
+        videoRef.current.onloadedmetadata = () => {
+          videoRef.current?.play();
+        };
+      }
+    } catch (err: any) { // Catch potential errors during camera access
+      console.error('Error accessing camera:', err);
+      setError('Camera access denied or unavailable. Please check your browser permissions.');
+      setShowCamera(false); // Hide camera modal if access fails
+    }
+  };
+
+  // Function to stop the camera stream
+  const closeCamera = () => {
+    if (videoRef.current?.srcObject) {
+      (videoRef.current.srcObject as MediaStream) // Type assertion to MediaStream
+        .getTracks() // Get all tracks (video, audio)
+        .forEach((track) => track.stop()); // Stop each track
+    }
+    setShowCamera(false); // Hide camera modal
+  };
+
+  // Function to capture a snapshot from the video stream
+  const captureSnapshot = async () => {
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+
+    if (!video || !canvas) {
+      setError('Camera not ready for snapshot.');
+      return;
+    }
+
+    // Set canvas dimensions to match video stream
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+
+    const context = canvas.getContext('2d');
+    if (context) {
+      // Draw the current video frame onto the canvas
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      // Get image data as a Base64 URL (JPEG format)
+      const imageDataUrl = canvas.toDataURL('image/jpeg');
+      setCapturedImagePreviewUrl(imageDataUrl); // Show captured image preview
+
+      closeCamera(); // Close the live camera view after capturing
+
+      // Convert data URL to Blob for FormData
+      const blob = await (await fetch(imageDataUrl)).blob();
+      const file = new File([blob], "snapshot.jpg", { type: "image/jpeg" });
+
+      // Now send this File object for analysis
+      handleAnalyzeSnapshot(file);
+    }
+  };
+
+  // Function to send the captured snapshot to the backend for analysis
+  const handleAnalyzeSnapshot = async (file: File) => {
+    setLoadingAnalysis(true);
+    setError(null);
+    setAnalysisResult(null);
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    // IMPORTANT: Replace with your actual backend URL (e.g., your local FastAPI or deployed Cloud Function)
+    const API_ENDPOINT = 'http://172.17.117.236:8000/predict'; // Example: Your local FastAPI
+
+    try {
+      const response = await fetch(API_ENDPOINT, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => response.text());
+        throw new Error(`HTTP error! Status: ${response.status}. Details: ${
+          typeof errorData === 'object' ? JSON.stringify(errorData) : errorData
+        }`);
+      }
+
+      const result = await response.json();
+      setAnalysisResult(result);
+
+    } catch (err: any) {
+      console.error('Analysis API error:', err);
+      setError(`Failed to get analysis: ${err.message}. Ensure backend is running.`);
+    } finally {
+      setLoadingAnalysis(false);
+    }
+  };
+
+
   return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+    <div className="flex flex-col items-center justify-center min-h-[calc(100vh-128px)] bg-gradient-to-br from-pink-50 via-purple-50 to-blue-50 p-6 text-center">
+      <div className="max-w-3xl mx-auto py-12 px-6 bg-white rounded-3xl shadow-xl border border-gray-100 transform transition duration-500 hover:scale-105">
+        <h1 className="text-5xl font-extrabold text-purple-800 mb-6 leading-tight">
+          Your Daily Beauty Mirror, Powered by AI ✨
+        </h1>
+        <p className="text-xl text-gray-700 mb-8 max-w-2xl mx-auto">
+          Uncover the secrets to radiant skin and flawless makeup with Glowscan AI. Your personal beauty companion, right in your pocket.
+        </p>
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
+          {/* Real-time Skin Analysis - Now Opens Camera */}
+          <button
+            onClick={() => setShowCamera(true)}
+            className="p-6 bg-pink-50 rounded-2xl shadow-md border border-pink-100 hover:shadow-lg transform transition duration-300 hover:-translate-y-1 text-left cursor-pointer"
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+            <h2 className="text-3xl font-bold text-pink-600 mb-3">
+              Real-time Skin Analysis 🔬
+            </h2>
+            <p className="text-gray-700">
+              Just open your camera and let our AI instantly analyze your skin's health, hydration, and more.
+            </p>
+          </button>
+
+          {/* Makeup Perfection Guide - Now Opens Camera */}
+          <button
+            onClick={() => setShowCamera(true)}
+            className="p-6 bg-blue-50 rounded-2xl shadow-md border border-blue-100 hover:shadow-lg transform transition duration-300 hover:-translate-y-1 text-left cursor-pointer"
           >
-            Read our docs
-          </a>
+            <h2 className="text-3xl font-bold text-blue-600 mb-3">
+              Makeup Perfection Guide 💄
+            </h2>
+            <p className="text-gray-700">
+              Get personalized feedback on your makeup application – from foundation blend to lipstick shade!
+            </p>
+          </button>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+
+        {/* Main Call to Action Button - Still links to upload page for file selection */}
+        <Link href="/upload" className="inline-flex items-center justify-center bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold py-4 px-10 rounded-full text-2xl shadow-lg transition duration-300 ease-in-out transform hover:scale-105 hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-purple-300">
+          Upload Image from Files 📂
+        </Link>
+      </div>
+
+      {/* Camera Modal */}
+      {showCamera && (
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex flex-col items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 shadow-xl w-full max-w-md">
+            <h2 className="text-2xl font-bold mb-4 text-center text-purple-700">Live Camera Mirror 🤳</h2>
+            <div className="relative w-full aspect-video bg-gray-800 rounded-xl overflow-hidden mb-4">
+              <video ref={videoRef} className="w-full h-full object-cover rounded-xl" autoPlay playsInline></video>
+              {/* Hidden canvas for taking snapshots */}
+              <canvas ref={canvasRef} className="hidden"></canvas>
+            </div>
+            <div className="flex justify-center space-x-4">
+              <button
+                onClick={captureSnapshot}
+                className="flex-1 bg-green-500 text-white py-3 rounded-full text-lg font-semibold hover:bg-green-600 transition shadow-md"
+              >
+                Capture Snapshot 📸
+              </button>
+              <button
+                onClick={closeCamera}
+                className="flex-1 bg-red-500 text-white py-3 rounded-full text-lg font-semibold hover:bg-red-600 transition shadow-md"
+              >
+                Close Camera ✖️
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Display captured image and analysis results if available */}
+      {capturedImagePreviewUrl && !loadingAnalysis && !showCamera && (
+        <div className="mt-8 w-full max-w-xl bg-white rounded-3xl shadow-xl border border-gray-100 p-8 text-center">
+          <h2 className="text-2xl font-extrabold text-purple-700 mb-6">Your Snapshot & Analysis</h2>
+          <div className="relative w-64 h-48 sm:w-80 sm:h-60 mx-auto bg-gray-200 rounded-xl overflow-hidden border-2 border-gray-300 shadow-sm mb-6">
+            <Image
+              src={capturedImagePreviewUrl}
+              alt="Captured Snapshot"
+              layout="fill"
+              objectFit="contain"
+              className="rounded-xl"
+            />
+          </div>
+          {loadingAnalysis ? (
+            <div className="flex items-center justify-center py-4">
+              <svg className="animate-spin h-8 w-8 text-purple-500 mr-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              <p className="text-lg text-gray-700">Analyzing your snapshot...</p>
+            </div>
+          ) : error ? (
+            <div className="mt-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg w-full text-center">
+              <p className="font-bold mb-1">Error:</p>
+              <p>{error}</p>
+            </div>
+          ) : (
+            analysisResult && <AnalysisResult result={analysisResult} />
+          )}
+        </div>
+      )}
     </div>
   );
 }
