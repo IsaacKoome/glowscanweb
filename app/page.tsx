@@ -35,26 +35,41 @@ export default function HomePage() {
     setError(null); // Clear previous errors
 
     try {
-      // Prioritize user-facing camera (front camera)
+      // Simplified video constraints for broader compatibility
+      // We explicitly request the front camera ('user')
       const constraints: MediaStreamConstraints = {
-        video: { facingMode: { ideal: "user" }, width: { ideal: 1280 }, height: { ideal: 720 } }
+        video: {
+          facingMode: 'user', // Request front camera
+          width: { ideal: 1280 }, // Attempt for high resolution, browser will adapt
+          height: { ideal: 720 }
+        }
       };
 
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         throw new Error("Camera access is not supported in this browser or device.");
       }
 
+      console.log("Attempting to get camera stream with constraints:", constraints);
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      console.log("Camera stream obtained:", stream);
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         // Ensure video plays automatically after metadata is loaded
-        videoRef.current.onloadedmetadata = () => {
-          videoRef.current?.play().catch(err => {
-            console.error("Error playing video stream:", err);
-            setError("Failed to play camera stream. Please ensure camera is not in use by another app.");
-          });
+        videoRef.current.onloadedmetadata = async () => {
+          console.log("Video metadata loaded.");
+          try {
+            await videoRef.current?.play();
+            console.log("Video playback started.");
+          } catch (playErr: any) {
+            console.error("Error playing video stream:", playErr);
+            setError("Failed to play camera stream. Is camera in use by another app?");
+          }
         };
+        // Explicitly load the video to ensure onloadedmetadata fires
+        videoRef.current.load();
+      } else {
+        console.warn("Video ref is null when stream was obtained.");
       }
     } catch (err: any) {
       console.error('Error accessing camera:', err);
@@ -77,6 +92,7 @@ export default function HomePage() {
 
   const closeCamera = () => {
     if (videoRef.current?.srcObject) {
+      console.log("Stopping video tracks.");
       (videoRef.current.srcObject as MediaStream)
         .getTracks()
         .forEach((track) => track.stop());
@@ -92,7 +108,12 @@ export default function HomePage() {
       setError('Camera or canvas not ready for snapshot.');
       return;
     }
-
+    // Check if video is actually playing
+    if (video.readyState < 2) { // HTMLMediaElement.HAVE_CURRENT_DATA
+      setError('Video stream not ready. Please wait a moment.');
+      return;
+    }
+    
     // Set canvas dimensions to match video stream dimensions
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
@@ -204,9 +225,15 @@ export default function HomePage() {
           <div className="bg-white rounded-2xl p-6 shadow-xl w-full max-w-md">
             <h2 className="text-2xl font-bold mb-4 text-center text-purple-700">Live Camera Mirror 🤳</h2>
             <div className="relative w-full aspect-video bg-gray-800 rounded-xl overflow-hidden mb-4">
-              {/* Added 'muted' to video for auto-play without user interaction warnings,
-                  removed unused className 'rounded-xl' from video as parent div has it */}
-              <video ref={videoRef} className="w-full h-full object-cover" autoPlay playsInline muted></video>
+              {/* Force aspect ratio on video and ensure it fills its container */}
+              <video 
+                ref={videoRef} 
+                className="w-full h-full object-cover" 
+                autoPlay 
+                playsInline 
+                muted 
+                style={{ transform: 'scaleX(-1)' }} /* Mirror horizontally for selfie-like view */
+              ></video>
               {/* Hidden canvas for taking snapshots */}
               <canvas ref={canvasRef} className="hidden"></canvas>
             </div>
@@ -247,7 +274,7 @@ export default function HomePage() {
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
               </svg>
-              <p className="text-lg text-gray-700">Analyzing your snapshott...</p>
+              <p className="text-lg text-gray-700">Analyzing your snapshot...</p>
             </div>
           ) : error ? (
             <div className="mt-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg w-full text-center">
