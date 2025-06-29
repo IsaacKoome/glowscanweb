@@ -1,68 +1,73 @@
+// app/page.tsx
 "use client";
 
 import React, { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import AnalysisResult from '../components/AnalysisResult';
+import AnalysisResult from '../components/AnalysisResult'; // Make sure path is correct
 
 export default function HomePage() {
   const [showCamera, setShowCamera] = useState(false);
   const [capturedImagePreviewUrl, setCapturedImagePreviewUrl] = useState<string | null>(null);
-  const [analysisResult, setAnalysisResult] = useState<any | null>(null);
-  const [loadingAnalysis, setLoadingAnalysis] = useState(false);
+  const [analysisResult, setAnalysisResult] = useState<any | null>(null); // Type this more strictly later if possible
+  const [loadingAnalysis, setLoadingAnalysis] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
+  // Effect to manage camera stream when showCamera state changes
   useEffect(() => {
     if (showCamera) {
       openCamera();
     } else {
       closeCamera();
     }
-
+    // Cleanup function when component unmounts or showCamera becomes false
     return () => {
       closeCamera();
     };
-  }, [showCamera]);
+  }, [showCamera]); // Re-run effect when showCamera changes
 
   const openCamera = async () => {
-    setCapturedImagePreviewUrl(null);
-    setAnalysisResult(null);
-    setError(null);
+    setCapturedImagePreviewUrl(null); // Clear any previous captured image
+    setAnalysisResult(null); // Clear any previous analysis results
+    setError(null); // Clear previous errors
 
     try {
-      const constraints = {
-        video: {
-          facingMode: { ideal: "user" },
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
-        }
+      // Prioritize user-facing camera (front camera)
+      const constraints: MediaStreamConstraints = {
+        video: { facingMode: { ideal: "user" }, width: { ideal: 1280 }, height: { ideal: 720 } }
       };
 
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        throw new Error("Camera access is not supported in this browser.");
+        throw new Error("Camera access is not supported in this browser or device.");
       }
 
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        // Ensure video plays automatically after metadata is loaded
         videoRef.current.onloadedmetadata = () => {
-          videoRef.current?.play();
+          videoRef.current?.play().catch(err => {
+            console.error("Error playing video stream:", err);
+            setError("Failed to play camera stream. Please ensure camera is not in use by another app.");
+          });
         };
       }
     } catch (err: any) {
       console.error('Error accessing camera:', err);
 
       let message = 'Unable to access the camera.';
-      if (err.name === 'NotAllowedError') {
-        message = 'Camera access was denied. Please allow camera permissions in your browser settings.';
+      if (err.name === 'NotAllowedError' || err.name === 'SecurityError') {
+        message = 'Camera access was denied. Please allow camera permissions in your browser/device settings.';
       } else if (err.name === 'NotFoundError') {
         message = 'No camera device found. Try switching to a device with a camera.';
       } else if (window.location.protocol !== 'https:') {
-        message = 'Camera access requires HTTPS. Please deploy your app over HTTPS.';
+        message = 'Camera access requires HTTPS. Please deploy your app over HTTPS to enable camera.';
+      } else {
+        message = `Camera error: ${err.message || err.name}.`;
       }
 
       setError(message);
@@ -84,23 +89,30 @@ export default function HomePage() {
     const canvas = canvasRef.current;
 
     if (!video || !canvas) {
-      setError('Camera not ready for snapshot.');
+      setError('Camera or canvas not ready for snapshot.');
       return;
     }
 
+    // Set canvas dimensions to match video stream dimensions
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
 
     const context = canvas.getContext('2d');
     if (context) {
+      // Draw the current video frame onto the canvas
       context.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const imageDataUrl = canvas.toDataURL('image/jpeg');
-      setCapturedImagePreviewUrl(imageDataUrl);
-      closeCamera();
 
+      // Get image data as a Base64 URL (JPEG format for smaller size)
+      const imageDataUrl = canvas.toDataURL('image/jpeg', 0.9); // Quality 0.9
+
+      setCapturedImagePreviewUrl(imageDataUrl); // Show captured image preview
+      closeCamera(); // Close the live camera view after capturing
+
+      // Convert data URL to Blob (File-like object) for FormData
       const blob = await (await fetch(imageDataUrl)).blob();
       const file = new File([blob], "snapshot.jpg", { type: "image/jpeg" });
 
+      // Send this File object for analysis
       handleAnalyzeSnapshot(file);
     }
   };
@@ -113,7 +125,9 @@ export default function HomePage() {
     const formData = new FormData();
     formData.append('file', file);
 
-    const API_ENDPOINT = 'http://172.17.117.236:8000/predict'; // Replace this when ready
+    // IMPORTANT: Use your actual backend URL (e.g., your local FastAPI or deployed Cloud Function)
+    // For Vercel deployment, this might need to be your deployed FastAPI endpoint URL.
+    const API_ENDPOINT = 'http://172.17.117.236:8000/predict'; 
 
     try {
       const response = await fetch(API_ENDPOINT, {
@@ -123,18 +137,22 @@ export default function HomePage() {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => response.text());
-        throw new Error(`HTTP error! Status: ${response.status}. Details: ${typeof errorData === 'object' ? JSON.stringify(errorData) : errorData}`);
+        throw new Error(`HTTP error! Status: ${response.status}. Details: ${
+          typeof errorData === 'object' ? JSON.stringify(errorData) : errorData
+        }`);
       }
 
       const result = await response.json();
       setAnalysisResult(result);
+
     } catch (err: any) {
       console.error('Analysis API error:', err);
-      setError(`Failed to get analysis: ${err.message}. Ensure backend is running.`);
+      setError(`Failed to get analysis: ${err.message}. Ensure backend is running and accessible.`);
     } finally {
       setLoadingAnalysis(false);
     }
   };
+
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[calc(100vh-128px)] bg-gradient-to-br from-pink-50 via-purple-50 to-blue-50 p-6 text-center">
@@ -147,6 +165,7 @@ export default function HomePage() {
         </p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
+          {/* Real-time Skin Analysis - Now Opens Camera */}
           <button
             onClick={() => setShowCamera(true)}
             className="p-6 bg-pink-50 rounded-2xl shadow-md border border-pink-100 hover:shadow-lg transform transition duration-300 hover:-translate-y-1 text-left cursor-pointer"
@@ -159,6 +178,7 @@ export default function HomePage() {
             </p>
           </button>
 
+          {/* Makeup Perfection Guide - Now Opens Camera */}
           <button
             onClick={() => setShowCamera(true)}
             className="p-6 bg-blue-50 rounded-2xl shadow-md border border-blue-100 hover:shadow-lg transform transition duration-300 hover:-translate-y-1 text-left cursor-pointer"
@@ -172,20 +192,22 @@ export default function HomePage() {
           </button>
         </div>
 
-        <Link
-          href="/upload"
-          className="inline-flex items-center justify-center bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold py-4 px-10 rounded-full text-2xl shadow-lg transition duration-300 ease-in-out transform hover:scale-105 hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-purple-300"
-        >
+        {/* Main Call to Action Button - Still links to upload page for file selection */}
+        <Link href="/upload" className="inline-flex items-center justify-center bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold py-4 px-10 rounded-full text-2xl shadow-lg transition duration-300 ease-in-out transform hover:scale-105 hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-purple-300">
           Upload Image from Files 📂
         </Link>
       </div>
 
+      {/* Camera Modal */}
       {showCamera && (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex flex-col items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl p-6 shadow-xl w-full max-w-md">
             <h2 className="text-2xl font-bold mb-4 text-center text-purple-700">Live Camera Mirror 🤳</h2>
             <div className="relative w-full aspect-video bg-gray-800 rounded-xl overflow-hidden mb-4">
-              <video ref={videoRef} className="w-full h-full object-cover rounded-xl" autoPlay playsInline></video>
+              {/* Added 'muted' to video for auto-play without user interaction warnings,
+                  removed unused className 'rounded-xl' from video as parent div has it */}
+              <video ref={videoRef} className="w-full h-full object-cover" autoPlay playsInline muted></video>
+              {/* Hidden canvas for taking snapshots */}
               <canvas ref={canvasRef} className="hidden"></canvas>
             </div>
             <div className="flex justify-center space-x-4">
@@ -206,6 +228,7 @@ export default function HomePage() {
         </div>
       )}
 
+      {/* Display captured image and analysis results if available */}
       {capturedImagePreviewUrl && !loadingAnalysis && !showCamera && (
         <div className="mt-8 w-full max-w-xl bg-white rounded-3xl shadow-xl border border-gray-100 p-8 text-center">
           <h2 className="text-2xl font-extrabold text-purple-700 mb-6">Your Snapshot & Analysis</h2>
@@ -224,7 +247,7 @@ export default function HomePage() {
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
               </svg>
-              <p className="text-lg text-gray-700">Analyzing your snapshot...</p>
+              <p className="text-lg text-gray-700">Analyzing your snapshott...</p>
             </div>
           ) : error ? (
             <div className="mt-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg w-full text-center">
