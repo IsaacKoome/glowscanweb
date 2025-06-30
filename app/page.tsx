@@ -35,8 +35,8 @@ export default function HomePage() {
         const constraints: MediaStreamConstraints = {
           video: {
             facingMode: 'user', // Request front camera
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
+            width: { ideal: 1920 }, // Request higher resolution for better view
+            height: { ideal: 1080 }
           }
         };
 
@@ -113,16 +113,17 @@ export default function HomePage() {
       return;
     }
     
+    // Set canvas dimensions to match video stream dimensions
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
 
     const context = canvas.getContext('2d');
     if (context) {
       context.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const imageDataUrl = canvas.toDataURL('image/jpeg', 0.9);
+      const imageDataUrl = canvas.toDataURL('image/jpeg', 0.9); // Quality 0.9
 
-      setCapturedImagePreviewUrl(imageDataUrl);
-      closeCamera(); // Closes the camera modal and stops stream via useEffect cleanup
+      setCapturedImagePreviewUrl(imageDataUrl); // Show captured image preview
+      closeCamera(); // Close the live camera view after capturing
 
       const blob = await (await fetch(imageDataUrl)).blob();
       const file = new File([blob], "snapshot.jpg", { type: "image/jpeg" });
@@ -177,6 +178,7 @@ export default function HomePage() {
         </p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
+          {/* Real-time Skin Analysis - Now Opens Camera */}
           <button
             onClick={() => setShowCamera(true)}
             className="p-6 bg-pink-50 rounded-2xl shadow-md border border-pink-100 hover:shadow-lg transform transition duration-300 hover:-translate-y-1 text-left cursor-pointer"
@@ -189,6 +191,7 @@ export default function HomePage() {
             </p>
           </button>
 
+          {/* Makeup Perfection Guide - Now Opens Camera */}
           <button
             onClick={() => setShowCamera(true)}
             className="p-6 bg-blue-50 rounded-2xl shadow-md border border-blue-100 hover:shadow-lg transform transition duration-300 hover:-translate-y-1 text-left cursor-pointer"
@@ -202,6 +205,7 @@ export default function HomePage() {
           </button>
         </div>
 
+        {/* Main Call to Action Button - Still links to upload page for file selection */}
         <Link href="/upload" className="inline-flex items-center justify-center bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold py-4 px-10 rounded-full text-2xl shadow-lg transition duration-300 ease-in-out transform hover:scale-105 hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-purple-300">
           Upload Image from Files 📂
         </Link>
@@ -210,7 +214,7 @@ export default function HomePage() {
       {/* Camera Modal */}
       {showCamera && (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex flex-col items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-6 shadow-xl w-full max-w-md">
+          <div className="bg-white rounded-2xl p-6 shadow-xl w-full max-w-2xl"> {/* Changed max-w-md to max-w-2xl */}
             <h2 className="text-2xl font-bold mb-4 text-center text-purple-700">Live Camera Mirror 🤳</h2>
             <div className="relative w-full aspect-video bg-gray-800 rounded-xl overflow-hidden mb-4">
               <video 
