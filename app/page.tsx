@@ -19,28 +19,53 @@ export default function HomePage() {
   // Effect to manage camera stream when showCamera state changes
   useEffect(() => {
     if (showCamera) {
-      openCamera();
+      // ONLY attempt to open camera if the videoRef is available (i.e., modal is mounted)
+      // This ensures videoRef.current is not null
+      if (videoRef.current) {
+        openCamera();
+      } else {
+        // If showCamera is true but videoRef.current is null, it means the modal
+        // hasn't fully rendered yet. We might need a small delay or another render cycle.
+        // For now, we rely on the next render cycle of the modal.
+      }
     } else {
       closeCamera();
     }
     // Cleanup function when component unmounts or showCamera becomes false
     return () => {
-      closeCamera();
+      closeCamera(); // Ensure camera is always closed on unmount
     };
-  }, [showCamera]); // Re-run effect when showCamera changes
+  }, [showCamera]); // Dependency on showCamera state
+
+  // This useEffect specifically watches for videoRef.current to become available
+  // when showCamera is true, indicating the modal has mounted.
+  useEffect(() => {
+    if (showCamera && videoRef.current && !videoRef.current.srcObject) {
+      // If camera should be open, videoRef exists, but no stream yet, try opening.
+      // This handles cases where videoRef.current might not be immediately available
+      // on the *same* render cycle as showCamera becomes true.
+      openCamera();
+    }
+  }, [showCamera, videoRef.current]); // Watch both showCamera and videoRef.current
+
 
   const openCamera = async () => {
     setCapturedImagePreviewUrl(null); // Clear any previous captured image
     setAnalysisResult(null); // Clear any previous analysis results
     setError(null); // Clear previous errors
 
+    // **IMPORTANT: Check videoRef.current here BEFORE proceeding**
+    if (!videoRef.current) {
+      console.warn("openCamera called, but videoRef.current is null. Retrying on next render or component mount.");
+      // Do not proceed if ref is not ready. The useEffect above will handle retrying.
+      return;
+    }
+
     try {
-      // Simplified video constraints for broader compatibility
-      // We explicitly request the front camera ('user')
       const constraints: MediaStreamConstraints = {
         video: {
           facingMode: 'user', // Request front camera
-          width: { ideal: 1280 }, // Attempt for high resolution, browser will adapt
+          width: { ideal: 1280 },
           height: { ideal: 720 }
         }
       };
@@ -53,24 +78,20 @@ export default function HomePage() {
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
       console.log("Camera stream obtained:", stream);
 
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        // Ensure video plays automatically after metadata is loaded
-        videoRef.current.onloadedmetadata = async () => {
-          console.log("Video metadata loaded.");
-          try {
-            await videoRef.current?.play();
-            console.log("Video playback started.");
-          } catch (playErr: any) {
-            console.error("Error playing video stream:", playErr);
-            setError("Failed to play camera stream. Is camera in use by another app?");
-          }
-        };
-        // Explicitly load the video to ensure onloadedmetadata fires
-        videoRef.current.load();
-      } else {
-        console.warn("Video ref is null when stream was obtained.");
-      }
+      // Assign stream to srcObject and play. videoRef.current is guaranteed to be not null here.
+      videoRef.current.srcObject = stream;
+      videoRef.current.onloadedmetadata = async () => {
+        console.log("Video metadata loaded.");
+        try {
+          await videoRef.current?.play(); // Use optional chaining just in case for older browsers
+          console.log("Video playback started.");
+        } catch (playErr: any) {
+          console.error("Error playing video stream:", playErr);
+          setError("Failed to play camera stream. Is camera in use by another app?");
+        }
+      };
+      videoRef.current.load(); // Explicitly load the video to ensure onloadedmetadata fires
+
     } catch (err: any) {
       console.error('Error accessing camera:', err);
 
@@ -108,7 +129,7 @@ export default function HomePage() {
       setError('Camera or canvas not ready for snapshot.');
       return;
     }
-    // Check if video is actually playing
+    
     if (video.readyState < 2) { // HTMLMediaElement.HAVE_CURRENT_DATA
       setError('Video stream not ready. Please wait a moment.');
       return;
@@ -146,8 +167,6 @@ export default function HomePage() {
     const formData = new FormData();
     formData.append('file', file);
 
-    // IMPORTANT: Use your actual backend URL (e.g., your local FastAPI or deployed Cloud Function)
-    // For Vercel deployment, this might need to be your deployed FastAPI endpoint URL.
     const API_ENDPOINT = 'http://172.17.117.236:8000/predict'; 
 
     try {
@@ -225,16 +244,14 @@ export default function HomePage() {
           <div className="bg-white rounded-2xl p-6 shadow-xl w-full max-w-md">
             <h2 className="text-2xl font-bold mb-4 text-center text-purple-700">Live Camera Mirror 🤳</h2>
             <div className="relative w-full aspect-video bg-gray-800 rounded-xl overflow-hidden mb-4">
-              {/* Force aspect ratio on video and ensure it fills its container */}
               <video 
                 ref={videoRef} 
                 className="w-full h-full object-cover" 
                 autoPlay 
                 playsInline 
                 muted 
-                style={{ transform: 'scaleX(-1)' }} /* Mirror horizontally for selfie-like view */
+                style={{ transform: 'scaleX(-1)' }} 
               ></video>
-              {/* Hidden canvas for taking snapshots */}
               <canvas ref={canvasRef} className="hidden"></canvas>
             </div>
             <div className="flex justify-center space-x-4">
