@@ -9,19 +9,21 @@ import AnalysisResult from '../components/AnalysisResult'; // Make sure path is 
 export default function HomePage() {
   const [showCamera, setShowCamera] = useState(false);
   const [capturedImagePreviewUrl, setCapturedImagePreviewUrl] = useState<string | null>(null);
-  const [analysisResult, setAnalysisResult] = useState<any | null>(null); // Type this more strictly later if possible
-  const [loadingAnalysis, setLoadingAnalysis] = useState<boolean>(false);
+  const [analysisResult, setAnalysisResult] = useState<any | null>(null); // For snapshot analysis result
+  const [liveResult, setLiveResult] = useState<any | null>(null); // NEW: For continuous live analysis result
+  const [loadingAnalysis, setLoadingAnalysis] = useState<boolean>(false); // For snapshot analysis loading
+  const [isStreamingAnalysis, setIsStreamingAnalysis] = useState<boolean>(false); // NEW: Indicates if live analysis is active
   const [error, setError] = useState<string | null>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  // Main effect to manage camera stream when showCamera state or videoRef changes
+  // Main effect to manage camera stream and live analysis interval
   useEffect(() => {
-    let stream: MediaStream | null = null; // Declare stream here to manage its lifecycle
+    let stream: MediaStream | null = null;
+    let intervalId: NodeJS.Timeout | undefined; // Use NodeJS.Timeout for clarity with setInterval
 
     const initCamera = async () => {
-      // Ensure videoRef is current and showCamera is true before proceeding
       if (!videoRef.current || !showCamera) {
         console.log("initCamera: videoRef.current is null or showCamera is false. Not initializing camera.");
         return;
@@ -29,20 +31,17 @@ export default function HomePage() {
 
       setCapturedImagePreviewUrl(null);
       setAnalysisResult(null);
+      setLiveResult(null); // Clear live results on new camera open
       setError(null);
 
       try {
         const constraints: MediaStreamConstraints = {
           video: {
-            facingMode: 'user', // Request front camera
-            width: { ideal: 1920 }, // Request higher resolution for better view
+            facingMode: 'user',
+            width: { ideal: 1920 },
             height: { ideal: 1080 }
           }
         };
-
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-          throw new Error("Camera access is not supported in this browser or device.");
-        }
 
         console.log("Attempting to get camera stream with constraints:", constraints);
         stream = await navigator.mediaDevices.getUserMedia(constraints);
@@ -54,9 +53,17 @@ export default function HomePage() {
           try {
             await videoRef.current?.play();
             console.log("Video playback started.");
+            setIsStreamingAnalysis(true); // Start streaming analysis when video plays
+
+            // Start sending frames every 3 seconds
+            intervalId = setInterval(() => {
+              sendFrameForLiveAnalysis();
+            }, 3000); // Adjust interval as needed (e.g., 5000ms for 5 seconds)
+
           } catch (playErr: any) {
             console.error("Error playing video stream:", playErr);
             setError("Failed to play camera stream. Is camera in use by another app?");
+            setShowCamera(false); // Close camera on playback error
           }
         };
         videoRef.current.load();
@@ -67,9 +74,9 @@ export default function HomePage() {
         if (err.name === 'NotAllowedError' || err.name === 'SecurityError') {
           message = 'Camera access denied. Please allow permissions in browser/device settings.';
         } else if (err.name === 'NotFoundError') {
-          message = 'No camera device found. Try a device with a camera.';
+          message = 'No camera device found. Try switching to a device with a camera.';
         } else if (window.location.protocol !== 'https:') {
-          message = 'Camera requires HTTPS. Deploy over HTTPS.';
+          message = 'Camera access requires HTTPS. Please deploy your app over HTTPS to enable camera.';
         } else {
           message = `Camera error: ${err.message || err.name}.`;
         }
@@ -78,17 +85,21 @@ export default function HomePage() {
       }
     };
 
-    // This runs when showCamera becomes true AND videoRef.current becomes available
     if (showCamera && videoRef.current) {
       initCamera();
     }
 
-    // Cleanup function: stop stream when component unmounts or showCamera becomes false
+    // Cleanup function: stop stream and clear interval when component unmounts or showCamera becomes false
     return () => {
       if (stream) {
         console.log("Stopping video tracks during cleanup.");
         stream.getTracks().forEach((track) => track.stop());
       }
+      if (intervalId) {
+        console.log("Clearing live analysis interval.");
+        clearInterval(intervalId);
+      }
+      setIsStreamingAnalysis(false); // Ensure streaming analysis state is reset
     };
   }, [showCamera, videoRef.current]); // Dependencies: showCamera and videoRef.current
 
@@ -99,21 +110,73 @@ export default function HomePage() {
   };
 
 
+  // NEW: Function to capture a frame and send for live analysis
+  const sendFrameForLiveAnalysis = async () => {
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+
+    if (!video || !canvas || video.readyState < 2) { // Ensure video is ready
+      console.warn("Live analysis: Video or canvas not ready.");
+      return;
+    }
+
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+
+    const context = canvas.getContext('2d');
+    if (context) {
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      // Convert canvas content to Blob (more efficient for FormData than DataURL then Blob)
+      canvas.toBlob(async (blob) => {
+        if (!blob) {
+          console.error("Failed to create blob from canvas.");
+          return;
+        }
+
+        const formData = new FormData();
+        formData.append('file', new File([blob], "live_frame.jpg", { type: "image/jpeg" }));
+
+        // IMPORTANT: Use your actual backend URL (e.g., your local FastAPI or deployed Cloud Function)
+        const API_ENDPOINT = 'http://172.17.117.236:8000/predict'; 
+
+        try {
+          // No loading state for individual live frames, as it's continuous
+          const response = await fetch(API_ENDPOINT, {
+            method: 'POST',
+            body: formData,
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => response.text());
+            console.error(`Live analysis HTTP Error! Status: ${response.status}. Details: ${JSON.stringify(errorData)}`);
+            // Optionally set a temporary error state for live analysis
+            // setError(`Live analysis failed: ${response.status}`);
+            return;
+          }
+
+          const result = await response.json();
+          setLiveResult(result); // Update the live result state
+          console.log("Live analysis result:", result);
+
+        } catch (err: any) {
+          console.error('Live analysis fetch error:', err);
+          // setError(`Live analysis network error: ${err.message}`); // Avoid constant error pop-ups for live stream
+        }
+      }, 'image/jpeg', 0.8); // JPEG format with 80% quality
+    }
+  };
+
+  // Function to capture a single snapshot (for explicit capture button)
   const captureSnapshot = async () => {
     const video = videoRef.current;
     const canvas = canvasRef.current;
 
-    if (!video || !canvas) {
+    if (!video || !canvas || video.readyState < 2) {
       setError('Camera or canvas not ready for snapshot.');
       return;
     }
     
-    if (video.readyState < 2) { // HTMLMediaElement.HAVE_CURRENT_DATA
-      setError('Video stream not ready. Please wait a moment.');
-      return;
-    }
-    
-    // Set canvas dimensions to match video stream dimensions
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
 
@@ -128,19 +191,20 @@ export default function HomePage() {
       const blob = await (await fetch(imageDataUrl)).blob();
       const file = new File([blob], "snapshot.jpg", { type: "image/jpeg" });
 
-      handleAnalyzeSnapshot(file);
+      handleAnalyzeSnapshot(file); // Send this File object for analysis
     }
   };
 
+  // Function to send the captured snapshot to the backend for analysis (snapshot-specific)
   const handleAnalyzeSnapshot = async (file: File) => {
-    setLoadingAnalysis(true);
+    setLoadingAnalysis(true); // Set loading for snapshot analysis
     setError(null);
-    setAnalysisResult(null);
-
-    const API_ENDPOINT = 'http://172.17.117.236:8000/predict'; 
+    setAnalysisResult(null); // Clear previous snapshot result
 
     const formData = new FormData();
     formData.append('file', file);
+
+    const API_ENDPOINT = 'http://172.17.117.236:8000/predict'; 
 
     try {
       const response = await fetch(API_ENDPOINT, {
@@ -156,11 +220,11 @@ export default function HomePage() {
       }
 
       const result = await response.json();
-      setAnalysisResult(result);
+      setAnalysisResult(result); // Set snapshot analysis result
 
     } catch (err: any) {
-      console.error('Analysis API error:', err);
-      setError(`Failed to get analysis: ${err.message}. Ensure backend is running and accessible.`);
+      console.error('Snapshot Analysis API error:', err);
+      setError(`Failed to get snapshot analysis: ${err.message}. Ensure backend is running.`);
     } finally {
       setLoadingAnalysis(false);
     }
@@ -214,7 +278,7 @@ export default function HomePage() {
       {/* Camera Modal */}
       {showCamera && (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex flex-col items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-6 shadow-xl w-full max-w-2xl"> {/* Changed max-w-md to max-w-2xl */}
+          <div className="bg-white rounded-2xl p-6 shadow-xl w-full max-w-2xl">
             <h2 className="text-2xl font-bold mb-4 text-center text-purple-700">Live Camera Mirror 🤳</h2>
             <div className="relative w-full aspect-video bg-gray-800 rounded-xl overflow-hidden mb-4">
               <video 
@@ -227,7 +291,21 @@ export default function HomePage() {
               ></video>
               <canvas ref={canvasRef} className="hidden"></canvas>
             </div>
-            <div className="flex justify-center space-x-4">
+            
+            {/* Live Analysis Insights Display */}
+            {isStreamingAnalysis && (
+              <div className="mt-4 p-4 bg-purple-50 rounded-xl shadow-inner text-purple-800 text-center">
+                <h3 className="text-lg font-semibold mb-1">Live Skin Insights</h3>
+                {liveResult ? (
+                  // Display live result. You'll want to format this nicely later.
+                  <pre className="text-sm overflow-auto max-h-40">{JSON.stringify(liveResult, null, 2)}</pre>
+                ) : (
+                  <p>Analyzing live... 🔄</p>
+                )}
+              </div>
+            )}
+
+            <div className="flex justify-center space-x-4 mt-4"> {/* Added mt-4 for spacing */}
               <button
                 onClick={captureSnapshot}
                 className="flex-1 bg-green-500 text-white py-3 rounded-full text-lg font-semibold hover:bg-green-600 transition shadow-md"
