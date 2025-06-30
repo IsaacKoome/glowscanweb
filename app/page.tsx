@@ -204,7 +204,8 @@ export default function HomePage() {
     const formData = new FormData();
     formData.append('file', file);
 
-    const API_ENDPOINT = 'http://172.17.117.236:8000/predict'; 
+    const API_ENDPOINT = 'https://glowscan-backend-241128138627.us-central1.run.app/predict';
+
 
     try {
       const response = await fetch(API_ENDPOINT, {
