@@ -138,7 +138,7 @@ export default function HomePage() {
         formData.append('file', new File([blob], "live_frame.jpg", { type: "image/jpeg" }));
 
         // IMPORTANT: Use your actual backend URL (e.g., your local FastAPI or deployed Cloud Function)
-        const API_ENDPOINT = 'http://172.17.117.236:8000/predict'; 
+        const API_ENDPOINT = 'https://glowscan-backend-241128138627.us-central1.run.app/predict';
 
         try {
           // No loading state for individual live frames, as it's continuous
