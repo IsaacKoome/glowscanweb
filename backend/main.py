@@ -1,3 +1,4 @@
+import os
 from fastapi import FastAPI, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from google.generativeai import configure, GenerativeModel
@@ -17,7 +18,8 @@ app.add_middleware(
 )
 
 # ✅ 3. Configure Gemini API
-configure(api_key="AIzaSyBWoVzBQF_kBHSKN2883-3tgCoP-_-JSSg")  # <--- Replace with your real Gemini key
+
+GOOGLE_API_KEY = os.getenv("GEMINI_API_KEY")
 
 model = GenerativeModel("gemini-1.5-flash")
 
@@ -46,7 +48,6 @@ You are a skin and makeup analysis expert. Analyze this selfie and return a JSON
   "skin_tone": "...",     // e.g. "fair", "medium", "dark", "neutral", etc.
   "makeup_feedback": "..." // Feedback on makeup (blend, color match, etc.)
 }
-Be concise. Only output JSON — no explanation.
 """
 
         # Send to Gemini
