@@ -24,6 +24,7 @@ export default function AnalysisResult({ result }) {
   }
 
   return (
+    // Removed max-h and overflow-y-auto from here as it's now handled by the parent div in page.tsx
     <div className="bg-white rounded-xl p-6 shadow-lg mt-6 w-full max-w-md text-left border border-purple-100">
       <h2 className="text-2xl font-bold text-purple-700 mb-4 text-center">AI Analysis Insights 💡</h2>
       <p className="text-gray-700 text-center mb-4">{overallMessage}</p>

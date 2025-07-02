@@ -10,8 +10,8 @@ export default function HomePage() {
   const [showCamera, setShowCamera] = useState(false);
   const [capturedImagePreviewUrl, setCapturedImagePreviewUrl] = useState<string | null>(null);
   const [analysisResult, setAnalysisResult] = useState<any | null>(null); // For snapshot analysis result
-  // const [loadingAnalysis, setLoadingAnalysis] = useState<boolean>(false); // REMOVED: No longer used in this page's current flow
   const [liveResult, setLiveResult] = useState<any | null>(null); // For continuous live analysis result
+  // const [loadingAnalysis, setLoadingAnalysis] = useState<boolean>(false); // REMOVED: No longer used in this page's current flow
   const [isStreamingAnalysis, setIsStreamingAnalysis] = useState<boolean>(false); // Indicates if live analysis is active
   const [isPaused, setIsPaused] = useState<boolean>(false); // State to control pausing live analysis
   const [error, setError] = useState<string | null>(null);
@@ -83,8 +83,6 @@ export default function HomePage() {
     let intervalId: NodeJS.Timeout | undefined;
 
     const initCamera = async () => {
-      // **IMPORTANT**: Removed `videoRef.current` from this check.
-      // The `useEffect` below will ensure `initCamera` runs only when `videoRef.current` is ready.
       if (!showCamera) {
         console.log("initCamera: showCamera is false. Not initializing camera.");
         return;
@@ -96,10 +94,9 @@ export default function HomePage() {
       setError(null);
       setIsPaused(false); // Ensure not paused when camera first opens
 
-      // **IMPORTANT**: Guard against null videoRef.current here before using it
       if (!videoRef.current) {
         console.warn("initCamera called, but videoRef.current is null. This should be caught by the dependent useEffect.");
-        return; // Should ideally not happen with the dependent useEffect, but good safeguard
+        return;
       }
 
       try {
@@ -155,16 +152,11 @@ export default function HomePage() {
       }
     };
 
-    // This useEffect now primarily triggers when showCamera changes
-    // The `initCamera` function itself has the internal `videoRef.current` check.
-    // The `sendFrameForLiveAnalysis` is included because it's used inside the effect's callback.
-    if (showCamera) { // Only run if showCamera is true
+    if (showCamera) {
       initCamera();
     }
 
-
     // Cleanup function: stop stream and clear interval when component unmounts or showCamera becomes false
-    // This is crucial for stopping the analysis loop
     return () => {
       if (stream) {
         console.log("Stopping video tracks during cleanup.");
@@ -177,7 +169,7 @@ export default function HomePage() {
       setIsStreamingAnalysis(false); // Ensure streaming analysis state is reset
       setIsPaused(false); // Ensure paused state is reset
     };
-  }, [showCamera, isPaused, sendFrameForLiveAnalysis]); // Removed videoRef.current from dependencies
+  }, [showCamera, isPaused, sendFrameForLiveAnalysis]);
 
   // Function to toggle pause/resume for live analysis
   const togglePauseResume = () => {
@@ -310,9 +302,12 @@ export default function HomePage() {
       {/* Camera Modal */}
       {showCamera && (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex flex-col items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-6 shadow-xl w-full max-w-2xl">
+          {/* Main modal content box: Added flex-col, h-full, and max-h for controlled height */}
+          <div className="bg-white rounded-2xl p-6 shadow-xl w-full max-w-2xl flex flex-col h-[90vh] max-h-[700px]"> {/* Increased max-h for more vertical space */}
             <h2 className="text-2xl font-bold mb-4 text-center text-purple-700">Live Camera Mirror 🤳</h2>
-            <div className="relative w-full aspect-video bg-gray-800 rounded-xl overflow-hidden mb-4">
+            
+            {/* Video Area: flex-shrink-0 to maintain its size */}
+            <div className="relative w-full aspect-video bg-gray-800 rounded-xl overflow-hidden mb-4 flex-shrink-0">
               <video 
                 ref={videoRef} 
                 className="w-full h-full object-cover" 
@@ -324,9 +319,9 @@ export default function HomePage() {
               <canvas ref={canvasRef} className="hidden"></canvas>
             </div>
             
-            {/* Live Analysis Insights Display */}
+            {/* Live Analysis Insights Display: flex-grow to take remaining space, overflow-y-auto for scrolling */}
             {isStreamingAnalysis && (
-              <div className="mt-4 p-4 bg-purple-50 rounded-xl shadow-inner text-purple-800 text-left">
+              <div className="mt-4 p-4 bg-purple-50 rounded-xl shadow-inner text-purple-800 text-left flex-grow overflow-y-auto">
                 <h3 className="text-lg font-semibold mb-1 text-center">Live Skin Insights</h3>
                 {liveResult ? (
                   // Display live result using the AnalysisResult component
@@ -337,7 +332,8 @@ export default function HomePage() {
               </div>
             )}
 
-            <div className="flex justify-center space-x-4 mt-4">
+            {/* Buttons: flex-shrink-0 to keep fixed at bottom */}
+            <div className="flex justify-center space-x-4 mt-4 flex-shrink-0">
               {isStreamingAnalysis && !isPaused ? (
                 <button
                   onClick={togglePauseResume}
@@ -366,7 +362,7 @@ export default function HomePage() {
       )}
 
       {/* Display captured image and analysis results if available */}
-      {capturedImagePreviewUrl && /* !loadingAnalysis && */ !showCamera && ( // Removed !loadingAnalysis from condition
+      {capturedImagePreviewUrl && !showCamera && (
         <div className="mt-8 w-full max-w-xl bg-white rounded-3xl shadow-xl border border-gray-100 p-8 text-center">
           <h2 className="text-2xl font-extrabold text-purple-700 mb-6">Your Snapshot & Analysis</h2>
           <div className="relative w-64 h-48 sm:w-80 sm:h-60 mx-auto bg-gray-200 rounded-xl overflow-hidden border-2 border-gray-300 shadow-sm mb-6">
@@ -378,27 +374,8 @@ export default function HomePage() {
               className="rounded-xl"
             />
           </div>
-          {/* Removed loadingAnalysis spinner and error display for snapshot as handleAnalyzeSnapshot is commented out */}
-          {/*
-          {loadingAnalysis ? (
-            <div className="flex items-center justify-center py-4">
-              <svg className="animate-spin h-8 w-8 text-purple-500 mr-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-              <p className="text-lg text-gray-700">Analyzing your snapshot...</p>
-            </div>
-          ) : error ? (
-            <div className="mt-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg w-full text-center">
-              <p className="font-bold mb-1">Error:</p>
-              <p>{error}</p>
-            </div>
-          ) : (
-            analysisResult && <AnalysisResult result={analysisResult} />
-          )}
-          */}
-          {analysisResult && <AnalysisResult result={analysisResult} />} {/* Display result if available */}
-          {error && ( // Keep error display for snapshot results if it's still relevant
+          {analysisResult && <AnalysisResult result={analysisResult} />}
+          {error && (
             <div className="mt-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg w-full text-center">
               <p className="font-bold mb-1">Error:</p>
               <p>{error}</p>
