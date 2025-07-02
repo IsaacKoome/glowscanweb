@@ -1,7 +1,7 @@
 // app/page.tsx
 "use client";
 
-import React, { useState, useRef, useEffect, useCallback } from 'react'; // Import useCallback
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import AnalysisResult from '../components/AnalysisResult'; // Make sure path is correct
@@ -11,18 +11,15 @@ export default function HomePage() {
   const [capturedImagePreviewUrl, setCapturedImagePreviewUrl] = useState<string | null>(null);
   const [analysisResult, setAnalysisResult] = useState<any | null>(null); // For snapshot analysis result
   const [liveResult, setLiveResult] = useState<any | null>(null); // For continuous live analysis result
-  // const [loadingAnalysis, setLoadingAnalysis] = useState<boolean>(false); // REMOVED: No longer used in this page's current flow
-  const [isStreamingAnalysis, setIsStreamingAnalysis] = useState<boolean>(false); // Indicates if live analysis is active
-  const [isPaused, setIsPaused] = useState<boolean>(false); // State to control pausing live analysis
+  const [isStreamingAnalysis, setIsStreamingAnalysis] = useState<boolean>(false);
+  const [isPaused, setIsPaused] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  const videoRef = useRef<HTMLVideoElement>(null); // Corrected type
+  const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   // Function to capture a frame and send for live analysis
-  // Wrapped in useCallback to prevent unnecessary re-creation and avoid useEffect dependency issues
   const sendFrameForLiveAnalysis = useCallback(async () => {
-    // Only send if not paused
     if (isPaused) {
       console.log("Live analysis paused. Not sending frame.");
       return;
@@ -31,7 +28,7 @@ export default function HomePage() {
     const video = videoRef.current;
     const canvas = canvasRef.current;
 
-    if (!video || !canvas || video.readyState < 2) { // Ensure video is ready
+    if (!video || !canvas || video.readyState < 2) {
       console.warn("Live analysis: Video or canvas not ready.");
       return;
     }
@@ -67,15 +64,15 @@ export default function HomePage() {
           }
 
           const result = await response.json();
-          setLiveResult(result); // Update the live result state
+          setLiveResult(result);
           console.log("Live analysis result:", result);
 
         } catch (err: any) {
           console.error('Live analysis fetch error:', err);
         }
-      }, 'image/jpeg', 0.8); // JPEG format with 80% quality
+      }, 'image/jpeg', 0.8);
     }
-  }, [isPaused]); // Dependency for useCallback: only recreate if isPaused changes
+  }, [isPaused]);
 
   // Main effect to manage camera stream and live analysis interval
   useEffect(() => {
@@ -90,9 +87,9 @@ export default function HomePage() {
 
       setCapturedImagePreviewUrl(null);
       setAnalysisResult(null);
-      setLiveResult(null); // Clear live results on new camera open
+      setLiveResult(null);
       setError(null);
-      setIsPaused(false); // Ensure not paused when camera first opens
+      setIsPaused(false);
 
       if (!videoRef.current) {
         console.warn("initCamera called, but videoRef.current is null. This should be caught by the dependent useEffect.");
@@ -118,19 +115,18 @@ export default function HomePage() {
           try {
             await videoRef.current?.play();
             console.log("Video playback started.");
-            setIsStreamingAnalysis(true); // Start streaming analysis when video plays
+            setIsStreamingAnalysis(true);
 
-            // Start sending frames only if not paused
             if (!isPaused) {
               intervalId = setInterval(() => {
                 sendFrameForLiveAnalysis();
-              }, 3000); // Adjust interval as needed
+              }, 3000);
             }
 
           } catch (playErr: any) {
             console.error("Error playing video stream:", playErr);
             setError("Failed to play camera stream. Is camera in use by another app?");
-            setShowCamera(false); // Close camera on playback error
+            setShowCamera(false);
           }
         };
         videoRef.current.load();
@@ -148,7 +144,7 @@ export default function HomePage() {
           message = `Camera error: ${err.message || err.name}.`;
         }
         setError(message);
-        setShowCamera(false); // Hide modal if camera access fails
+        setShowCamera(false);
       }
     };
 
@@ -156,7 +152,6 @@ export default function HomePage() {
       initCamera();
     }
 
-    // Cleanup function: stop stream and clear interval when component unmounts or showCamera becomes false
     return () => {
       if (stream) {
         console.log("Stopping video tracks during cleanup.");
@@ -166,94 +161,20 @@ export default function HomePage() {
         console.log("Clearing live analysis interval.");
         clearInterval(intervalId);
       }
-      setIsStreamingAnalysis(false); // Ensure streaming analysis state is reset
-      setIsPaused(false); // Ensure paused state is reset
+      setIsStreamingAnalysis(false);
+      setIsPaused(false);
     };
   }, [showCamera, isPaused, sendFrameForLiveAnalysis]);
 
-  // Function to toggle pause/resume for live analysis
   const togglePauseResume = () => {
     setIsPaused(prev => !prev);
   };
 
-  // Close Camera function (still separate for button clicks)
   const closeCamera = () => {
-    setShowCamera(false); // This will trigger the useEffect cleanup
+    setShowCamera(false);
   };
 
-
-  // Function to capture a single snapshot (for explicit capture button)
-  // This function is now commented out as it's not used in the current live analysis flow.
-  // If you wish to add a dedicated snapshot feature elsewhere (e.g., on the /upload page),
-  // you can uncomment and adapt this function there.
-  /*
-  const captureSnapshot = async () => {
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-
-    if (!video || !canvas || video.readyState < 2) {
-      setError('Camera or canvas not ready for snapshot.');
-      return;
-    }
-    
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-
-    const context = canvas.getContext('2d');
-    if (context) {
-      context.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const imageDataUrl = canvas.toDataURL('image/jpeg', 0.9);
-
-      setCapturedImagePreviewUrl(imageDataUrl);
-      closeCamera(); // Close the live camera view after capturing
-
-      const blob = await (await fetch(imageDataUrl)).blob();
-      const file = new File([blob], "snapshot.jpg", { type: "image/jpeg" });
-
-      handleAnalyzeSnapshot(file); // Send this File object for analysis
-    }
-  };
-  */
-
-  // Function to send the captured snapshot to the backend for analysis (snapshot-specific)
-  // This is now commented out as it's only called by the (now commented out) captureSnapshot function.
-  // If you re-introduce a snapshot feature, you'll need to uncomment and use this.
-  /*
-  const handleAnalyzeSnapshot = async (file: File) => {
-    setLoadingAnalysis(true);
-    setError(null);
-    setAnalysisResult(null);
-
-    const formData = new FormData();
-    formData.append('file', file);
-
-    const API_ENDPOINT = 'https://glowscan-backend-241128138627.us-central1.run.app/predict'; 
-
-    try {
-      const response = await fetch(API_ENDPOINT, {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => response.text());
-        throw new Error(`HTTP error! Status: ${response.status}. Details: ${
-          typeof errorData === 'object' ? JSON.stringify(errorData) : errorData
-        }`);
-      }
-
-      const result = await response.json();
-      setAnalysisResult(result);
-
-    } catch (err: any) {
-      console.error('Snapshot Analysis API error:', err);
-      setError(`Failed to get snapshot analysis: ${err.message}. Ensure backend is running.`);
-    } finally {
-      setLoadingAnalysis(false);
-    }
-  };
-  */
-
+  // handleAnalyzeSnapshot and captureSnapshot are commented out as before.
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[calc(100vh-128px)] bg-gradient-to-br from-pink-50 via-purple-50 to-blue-50 p-6 text-center">
@@ -266,7 +187,6 @@ export default function HomePage() {
         </p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
-          {/* Real-time Skin Analysis - Now Opens Camera */}
           <button
             onClick={() => setShowCamera(true)}
             className="p-6 bg-pink-50 rounded-2xl shadow-md border border-pink-100 hover:shadow-lg transform transition duration-300 hover:-translate-y-1 text-left cursor-pointer"
@@ -279,7 +199,6 @@ export default function HomePage() {
             </p>
           </button>
 
-          {/* Makeup Perfection Guide - Now Opens Camera */}
           <button
             onClick={() => setShowCamera(true)}
             className="p-6 bg-blue-50 rounded-2xl shadow-md border border-blue-100 hover:shadow-lg transform transition duration-300 hover:-translate-y-1 text-left cursor-pointer"
@@ -293,7 +212,6 @@ export default function HomePage() {
           </button>
         </div>
 
-        {/* Main Call to Action Button - Still links to upload page for file selection */}
         <Link href="/upload" className="inline-flex items-center justify-center bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold py-4 px-10 rounded-full text-2xl shadow-lg transition duration-300 ease-in-out transform hover:scale-105 hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-purple-300">
           Upload Image from Files 📂
         </Link>
@@ -301,30 +219,57 @@ export default function HomePage() {
 
       {/* Camera Modal */}
       {showCamera && (
-        <div className="fixed inset-0 bg-black bg-opacity-70 flex flex-col items-center justify-center z-50 p-4">
-          {/* Main modal content box: Added flex-col, h-full, and max-h for controlled height */}
-          <div className="bg-white rounded-2xl p-6 shadow-xl w-full max-w-2xl flex flex-col h-[90vh] max-h-[700px]"> {/* Increased max-h for more vertical space */}
-            <h2 className="text-2xl font-bold mb-4 text-center text-purple-700">Live Camera Mirror 🤳</h2>
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
+          {/* Main modal content box: Now a flex container for two columns on medium screens and up */}
+          <div className="bg-white rounded-2xl p-6 shadow-xl w-full max-w-5xl h-[90vh] max-h-[800px] flex flex-col md:flex-row gap-6"> {/* Increased max-w and max-h for two-column layout */}
             
-            {/* Video Area: flex-shrink-0 to maintain its size */}
-            <div className="relative w-full aspect-video bg-gray-800 rounded-xl overflow-hidden mb-4 flex-shrink-0">
-              <video 
-                ref={videoRef} 
-                className="w-full h-full object-cover" 
-                autoPlay 
-                playsInline 
-                muted 
-                style={{ transform: 'scaleX(-1)' }} 
-              ></video>
-              <canvas ref={canvasRef} className="hidden"></canvas>
-            </div>
-            
-            {/* Live Analysis Insights Display: flex-grow to take remaining space, overflow-y-auto for scrolling */}
+            {/* Left Column: Camera Feed & Controls */}
+            <div className="flex flex-col flex-1"> {/* flex-1 allows it to grow */}
+              <h2 className="text-2xl font-bold mb-4 text-center text-purple-700">Live Camera Mirror 🤳</h2>
+              <div className="relative w-full aspect-video bg-gray-800 rounded-xl overflow-hidden mb-4 flex-shrink-0">
+                <video 
+                  ref={videoRef} 
+                  className="w-full h-full object-cover" 
+                  autoPlay 
+                  playsInline 
+                  muted 
+                  style={{ transform: 'scaleX(-1)' }} 
+                ></video>
+                <canvas ref={canvasRef} className="hidden"></canvas>
+              </div>
+              
+              {/* Buttons for Camera Control */}
+              <div className="flex justify-center space-x-4 mt-auto flex-shrink-0"> {/* mt-auto pushes buttons to bottom */}
+                {isStreamingAnalysis && !isPaused ? (
+                  <button
+                    onClick={togglePauseResume}
+                    className="flex-1 bg-yellow-500 text-white py-3 rounded-full text-lg font-semibold hover:bg-yellow-600 transition shadow-md"
+                  >
+                    Pause Analysis ⏸️
+                  </button>
+                ) : isStreamingAnalysis && isPaused ? (
+                  <button
+                    onClick={togglePauseResume}
+                    className="flex-1 bg-green-500 text-white py-3 rounded-full text-lg font-semibold hover:bg-green-600 transition shadow-md"
+                  >
+                    Resume Analysis ▶️
+                  </button>
+                ) : null}
+                
+                <button
+                  onClick={closeCamera}
+                  className="flex-1 bg-red-500 text-white py-3 rounded-full text-lg font-semibold hover:bg-red-600 transition shadow-md"
+                >
+                  Close Camera ✖️
+                </button>
+              </div>
+            </div> {/* End Left Column */}
+
+            {/* Right Column: Live Analysis Insights */}
             {isStreamingAnalysis && (
-              <div className="mt-4 p-4 bg-purple-50 rounded-xl shadow-inner text-purple-800 text-left flex-grow overflow-y-auto">
+              <div className="flex flex-col flex-1 bg-purple-50 rounded-xl shadow-inner text-purple-800 p-4 overflow-y-auto"> {/* flex-1 and overflow-y-auto */}
                 <h3 className="text-lg font-semibold mb-1 text-center">Live Skin Insights</h3>
                 {liveResult ? (
-                  // Display live result using the AnalysisResult component
                   <AnalysisResult result={liveResult} />
                 ) : (
                   <p className="text-center">Analyzing live... 🔄</p>
@@ -332,32 +277,7 @@ export default function HomePage() {
               </div>
             )}
 
-            {/* Buttons: flex-shrink-0 to keep fixed at bottom */}
-            <div className="flex justify-center space-x-4 mt-4 flex-shrink-0">
-              {isStreamingAnalysis && !isPaused ? (
-                <button
-                  onClick={togglePauseResume}
-                  className="flex-1 bg-yellow-500 text-white py-3 rounded-full text-lg font-semibold hover:bg-yellow-600 transition shadow-md"
-                >
-                  Pause Analysis ⏸️
-                </button>
-              ) : isStreamingAnalysis && isPaused ? (
-                <button
-                  onClick={togglePauseResume}
-                  className="flex-1 bg-green-500 text-white py-3 rounded-full text-lg font-semibold hover:bg-green-600 transition shadow-md"
-                >
-                  Resume Analysis ▶️
-                </button>
-              ) : null}
-              
-              <button
-                onClick={closeCamera}
-                className="flex-1 bg-red-500 text-white py-3 rounded-full text-lg font-semibold hover:bg-red-600 transition shadow-md"
-              >
-                Close Camera ✖️
-              </button>
-            </div>
-          </div>
+          </div> {/* End Main modal content box */}
         </div>
       )}
 
