@@ -10,12 +10,13 @@ export default function HomePage() {
   const [showCamera, setShowCamera] = useState(false);
   const [capturedImagePreviewUrl, setCapturedImagePreviewUrl] = useState<string | null>(null);
   const [analysisResult, setAnalysisResult] = useState<any | null>(null); // For snapshot analysis result
-  const [liveResult, setLiveResult] = useState<any | null>(null); // NEW: For continuous live analysis result
+  const [liveResult, setLiveResult] = useState<any | null>(null); // For continuous live analysis result
   const [loadingAnalysis, setLoadingAnalysis] = useState<boolean>(false); // For snapshot analysis loading
-  const [isStreamingAnalysis, setIsStreamingAnalysis] = useState<boolean>(false); // NEW: Indicates if live analysis is active
+  const [isStreamingAnalysis, setIsStreamingAnalysis] = useState<boolean>(false); // Indicates if live analysis is active
+  const [isPaused, setIsPaused] = useState<boolean>(false); // NEW: State to control pausing live analysis
   const [error, setError] = useState<string | null>(null);
 
-  const videoRef = useRef<HTMLVideoElement>(null); // Corrected type for videoRef
+  const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   // Main effect to manage camera stream and live analysis interval
@@ -33,6 +34,7 @@ export default function HomePage() {
       setAnalysisResult(null);
       setLiveResult(null); // Clear live results on new camera open
       setError(null);
+      setIsPaused(false); // Ensure not paused when camera first opens
 
       try {
         const constraints: MediaStreamConstraints = {
@@ -55,10 +57,12 @@ export default function HomePage() {
             console.log("Video playback started.");
             setIsStreamingAnalysis(true); // Start streaming analysis when video plays
 
-            // Start sending frames every 3 seconds
-            intervalId = setInterval(() => {
-              sendFrameForLiveAnalysis();
-            }, 3000); // Adjust interval as needed (e.g., 5000ms for 5 seconds)
+            // Start sending frames only if not paused
+            if (!isPaused) {
+              intervalId = setInterval(() => {
+                sendFrameForLiveAnalysis();
+              }, 3000); // Adjust interval as needed
+            }
 
           } catch (playErr: any) {
             console.error("Error playing video stream:", playErr);
@@ -90,6 +94,7 @@ export default function HomePage() {
     }
 
     // Cleanup function: stop stream and clear interval when component unmounts or showCamera becomes false
+    // This is crucial for stopping the analysis loop
     return () => {
       if (stream) {
         console.log("Stopping video tracks during cleanup.");
@@ -100,9 +105,15 @@ export default function HomePage() {
         clearInterval(intervalId);
       }
       setIsStreamingAnalysis(false); // Ensure streaming analysis state is reset
+      setIsPaused(false); // Ensure paused state is reset
     };
-  }, [showCamera, videoRef.current]); // Dependencies: showCamera and videoRef.current
+  }, [showCamera, videoRef.current, isPaused]); // Added isPaused to dependencies to restart interval if unpaused
 
+
+  // Function to toggle pause/resume for live analysis
+  const togglePauseResume = () => {
+    setIsPaused(prev => !prev);
+  };
 
   // Close Camera function (still separate for button clicks)
   const closeCamera = () => {
@@ -110,8 +121,14 @@ export default function HomePage() {
   };
 
 
-  // NEW: Function to capture a frame and send for live analysis
+  // Function to capture a frame and send for live analysis
   const sendFrameForLiveAnalysis = async () => {
+    // Only send if not paused
+    if (isPaused) {
+      console.log("Live analysis paused. Not sending frame.");
+      return;
+    }
+
     const video = videoRef.current;
     const canvas = canvasRef.current;
 
@@ -127,7 +144,6 @@ export default function HomePage() {
     if (context) {
       context.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-      // Convert canvas content to Blob (more efficient for FormData than DataURL then Blob)
       canvas.toBlob(async (blob) => {
         if (!blob) {
           console.error("Failed to create blob from canvas.");
@@ -137,11 +153,9 @@ export default function HomePage() {
         const formData = new FormData();
         formData.append('file', new File([blob], "live_frame.jpg", { type: "image/jpeg" }));
 
-        // IMPORTANT: Use your actual backend URL (e.g., your local FastAPI or deployed Cloud Function)
         const API_ENDPOINT = 'https://glowscan-backend-241128138627.us-central1.run.app/predict'; 
 
         try {
-          // No loading state for individual live frames, as it's continuous
           const response = await fetch(API_ENDPOINT, {
             method: 'POST',
             body: formData,
@@ -150,8 +164,6 @@ export default function HomePage() {
           if (!response.ok) {
             const errorData = await response.json().catch(() => response.text());
             console.error(`Live analysis HTTP Error! Status: ${response.status}. Details: ${JSON.stringify(errorData)}`);
-            // Optionally set a temporary error state for live analysis
-            // setError(`Live analysis failed: ${response.status}`);
             return;
           }
 
@@ -161,14 +173,18 @@ export default function HomePage() {
 
         } catch (err: any) {
           console.error('Live analysis fetch error:', err);
-          // setError(`Live analysis network error: ${err.message}`); // Avoid constant error pop-ups for live stream
         }
       }, 'image/jpeg', 0.8); // JPEG format with 80% quality
     }
   };
 
   // Function to capture a single snapshot (for explicit capture button)
+  // This function is now only called when the user explicitly clicks "Capture Snapshot"
+  // from the main page (if you add such a button there later).
+  // It's no longer part of the live camera modal.
   const captureSnapshot = async () => {
+    // This function can be moved or adapted if you want a dedicated snapshot feature elsewhere.
+    // For now, it's kept for completeness but not directly used in the live modal.
     const video = videoRef.current;
     const canvas = canvasRef.current;
 
@@ -183,23 +199,23 @@ export default function HomePage() {
     const context = canvas.getContext('2d');
     if (context) {
       context.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const imageDataUrl = canvas.toDataURL('image/jpeg', 0.9); // Quality 0.9
+      const imageDataUrl = canvas.toDataURL('image/jpeg', 0.9);
 
-      setCapturedImagePreviewUrl(imageDataUrl); // Show captured image preview
+      setCapturedImagePreviewUrl(imageDataUrl);
       closeCamera(); // Close the live camera view after capturing
 
       const blob = await (await fetch(imageDataUrl)).blob();
       const file = new File([blob], "snapshot.jpg", { type: "image/jpeg" });
 
-      handleAnalyzeSnapshot(file); // Send this File object for analysis
+      handleAnalyzeSnapshot(file);
     }
   };
 
   // Function to send the captured snapshot to the backend for analysis (snapshot-specific)
   const handleAnalyzeSnapshot = async (file: File) => {
-    setLoadingAnalysis(true); // Set loading for snapshot analysis
+    setLoadingAnalysis(true);
     setError(null);
-    setAnalysisResult(null); // Clear previous snapshot result
+    setAnalysisResult(null);
 
     const formData = new FormData();
     formData.append('file', file);
@@ -220,7 +236,7 @@ export default function HomePage() {
       }
 
       const result = await response.json();
-      setAnalysisResult(result); // Set snapshot analysis result
+      setAnalysisResult(result);
 
     } catch (err: any) {
       console.error('Snapshot Analysis API error:', err);
@@ -294,24 +310,34 @@ export default function HomePage() {
             
             {/* Live Analysis Insights Display */}
             {isStreamingAnalysis && (
-              <div className="mt-4 p-4 bg-purple-50 rounded-xl shadow-inner text-purple-800 text-center">
-                <h3 className="text-lg font-semibold mb-1">Live Skin Insights</h3>
+              <div className="mt-4 p-4 bg-purple-50 rounded-xl shadow-inner text-purple-800 text-left"> {/* Changed text-center to text-left */}
+                <h3 className="text-lg font-semibold mb-1 text-center">Live Skin Insights</h3>
                 {liveResult ? (
                   // Display live result using the AnalysisResult component
                   <AnalysisResult result={liveResult} />
                 ) : (
-                  <p>Analyzing live... 🔄</p>
+                  <p className="text-center">Analyzing live... 🔄</p>
                 )}
               </div>
             )}
 
-            <div className="flex justify-center space-x-4 mt-4"> {/* Added mt-4 for spacing */}
-              <button
-                onClick={captureSnapshot}
-                className="flex-1 bg-green-500 text-white py-3 rounded-full text-lg font-semibold hover:bg-green-600 transition shadow-md"
-              >
-                Capture Snapshot 📸
-              </button>
+            <div className="flex justify-center space-x-4 mt-4">
+              {isStreamingAnalysis && !isPaused ? (
+                <button
+                  onClick={togglePauseResume}
+                  className="flex-1 bg-yellow-500 text-white py-3 rounded-full text-lg font-semibold hover:bg-yellow-600 transition shadow-md"
+                >
+                  Pause Analysis ⏸️
+                </button>
+              ) : isStreamingAnalysis && isPaused ? (
+                <button
+                  onClick={togglePauseResume}
+                  className="flex-1 bg-green-500 text-white py-3 rounded-full text-lg font-semibold hover:bg-green-600 transition shadow-md"
+                >
+                  Resume Analysis ▶️
+                </button>
+              ) : null} {/* No button if not streaming */}
+              
               <button
                 onClick={closeCamera}
                 className="flex-1 bg-red-500 text-white py-3 rounded-full text-lg font-semibold hover:bg-red-600 transition shadow-md"
