@@ -10,8 +10,8 @@ export default function HomePage() {
   const [showCamera, setShowCamera] = useState(false);
   const [capturedImagePreviewUrl, setCapturedImagePreviewUrl] = useState<string | null>(null);
   const [analysisResult, setAnalysisResult] = useState<any | null>(null); // For snapshot analysis result
+  // const [loadingAnalysis, setLoadingAnalysis] = useState<boolean>(false); // REMOVED: No longer used in this page's current flow
   const [liveResult, setLiveResult] = useState<any | null>(null); // For continuous live analysis result
-  const [loadingAnalysis, setLoadingAnalysis] = useState<boolean>(false); // For snapshot analysis loading
   const [isStreamingAnalysis, setIsStreamingAnalysis] = useState<boolean>(false); // Indicates if live analysis is active
   const [isPaused, setIsPaused] = useState<boolean>(false); // State to control pausing live analysis
   const [error, setError] = useState<string | null>(null);
@@ -366,7 +366,7 @@ export default function HomePage() {
       )}
 
       {/* Display captured image and analysis results if available */}
-      {capturedImagePreviewUrl && !loadingAnalysis && !showCamera && (
+      {capturedImagePreviewUrl && /* !loadingAnalysis && */ !showCamera && ( // Removed !loadingAnalysis from condition
         <div className="mt-8 w-full max-w-xl bg-white rounded-3xl shadow-xl border border-gray-100 p-8 text-center">
           <h2 className="text-2xl font-extrabold text-purple-700 mb-6">Your Snapshot & Analysis</h2>
           <div className="relative w-64 h-48 sm:w-80 sm:h-60 mx-auto bg-gray-200 rounded-xl overflow-hidden border-2 border-gray-300 shadow-sm mb-6">
@@ -378,6 +378,8 @@ export default function HomePage() {
               className="rounded-xl"
             />
           </div>
+          {/* Removed loadingAnalysis spinner and error display for snapshot as handleAnalyzeSnapshot is commented out */}
+          {/*
           {loadingAnalysis ? (
             <div className="flex items-center justify-center py-4">
               <svg className="animate-spin h-8 w-8 text-purple-500 mr-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -393,6 +395,14 @@ export default function HomePage() {
             </div>
           ) : (
             analysisResult && <AnalysisResult result={analysisResult} />
+          )}
+          */}
+          {analysisResult && <AnalysisResult result={analysisResult} />} {/* Display result if available */}
+          {error && ( // Keep error display for snapshot results if it's still relevant
+            <div className="mt-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg w-full text-center">
+              <p className="font-bold mb-1">Error:</p>
+              <p>{error}</p>
+            </div>
           )}
         </div>
       )}
