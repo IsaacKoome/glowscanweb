@@ -83,8 +83,10 @@ export default function HomePage() {
     let intervalId: NodeJS.Timeout | undefined;
 
     const initCamera = async () => {
-      if (!videoRef.current || !showCamera) {
-        console.log("initCamera: videoRef.current is null or showCamera is false. Not initializing camera.");
+      // **IMPORTANT**: Removed `videoRef.current` from this check.
+      // The `useEffect` below will ensure `initCamera` runs only when `videoRef.current` is ready.
+      if (!showCamera) {
+        console.log("initCamera: showCamera is false. Not initializing camera.");
         return;
       }
 
@@ -93,6 +95,12 @@ export default function HomePage() {
       setLiveResult(null); // Clear live results on new camera open
       setError(null);
       setIsPaused(false); // Ensure not paused when camera first opens
+
+      // **IMPORTANT**: Guard against null videoRef.current here before using it
+      if (!videoRef.current) {
+        console.warn("initCamera called, but videoRef.current is null. This should be caught by the dependent useEffect.");
+        return; // Should ideally not happen with the dependent useEffect, but good safeguard
+      }
 
       try {
         const constraints: MediaStreamConstraints = {
@@ -147,9 +155,13 @@ export default function HomePage() {
       }
     };
 
-    if (showCamera && videoRef.current) {
+    // This useEffect now primarily triggers when showCamera changes
+    // The `initCamera` function itself has the internal `videoRef.current` check.
+    // The `sendFrameForLiveAnalysis` is included because it's used inside the effect's callback.
+    if (showCamera) { // Only run if showCamera is true
       initCamera();
     }
+
 
     // Cleanup function: stop stream and clear interval when component unmounts or showCamera becomes false
     // This is crucial for stopping the analysis loop
@@ -165,8 +177,7 @@ export default function HomePage() {
       setIsStreamingAnalysis(false); // Ensure streaming analysis state is reset
       setIsPaused(false); // Ensure paused state is reset
     };
-  }, [showCamera, videoRef.current, isPaused, sendFrameForLiveAnalysis]); // Added sendFrameForLiveAnalysis to dependencies
-
+  }, [showCamera, isPaused, sendFrameForLiveAnalysis]); // Removed videoRef.current from dependencies
 
   // Function to toggle pause/resume for live analysis
   const togglePauseResume = () => {
@@ -213,8 +224,9 @@ export default function HomePage() {
   */
 
   // Function to send the captured snapshot to the backend for analysis (snapshot-specific)
-  // This is still used by the (now commented out) captureSnapshot function,
-  // or if you re-introduce a snapshot feature elsewhere.
+  // This is now commented out as it's only called by the (now commented out) captureSnapshot function.
+  // If you re-introduce a snapshot feature, you'll need to uncomment and use this.
+  /*
   const handleAnalyzeSnapshot = async (file: File) => {
     setLoadingAnalysis(true);
     setError(null);
@@ -248,6 +260,7 @@ export default function HomePage() {
       setLoadingAnalysis(false);
     }
   };
+  */
 
 
   return (
