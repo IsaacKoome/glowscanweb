@@ -221,12 +221,12 @@ export default function HomePage() {
       {showCamera && (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
           {/* Main modal content box: Now a flex container for two columns on medium screens and up */}
-          <div className="bg-white rounded-2xl p-6 shadow-xl w-full max-w-5xl h-[90vh] max-h-[800px] flex flex-col md:flex-row gap-6"> {/* Increased max-w and max-h for two-column layout */}
+          <div className="bg-white rounded-2xl p-6 shadow-xl w-full max-w-5xl h-[90vh] max-h-[800px] flex flex-col md:flex-row gap-6 relative"> {/* Added relative for absolute positioning of buttons */}
             
-            {/* Left Column: Camera Feed & Controls */}
-            <div className="flex flex-col flex-1"> {/* flex-1 allows it to grow */}
+            {/* Left Column: Camera Feed */}
+            <div className="flex flex-col flex-1">
               <h2 className="text-2xl font-bold mb-4 text-center text-purple-700">Live Camera Mirror 🤳</h2>
-              <div className="relative w-full aspect-video bg-gray-800 rounded-xl overflow-hidden mb-4 flex-shrink-0">
+              <div className="relative w-full aspect-video bg-gray-800 rounded-xl overflow-hidden mb-4 flex-grow"> {/* flex-grow to take available vertical space */}
                 <video 
                   ref={videoRef} 
                   className="w-full h-full object-cover" 
@@ -237,37 +237,11 @@ export default function HomePage() {
                 ></video>
                 <canvas ref={canvasRef} className="hidden"></canvas>
               </div>
-              
-              {/* Buttons for Camera Control */}
-              <div className="flex justify-center space-x-4 mt-auto flex-shrink-0"> {/* mt-auto pushes buttons to bottom */}
-                {isStreamingAnalysis && !isPaused ? (
-                  <button
-                    onClick={togglePauseResume}
-                    className="flex-1 bg-yellow-500 text-white py-3 rounded-full text-lg font-semibold hover:bg-yellow-600 transition shadow-md"
-                  >
-                    Pause Analysis ⏸️
-                  </button>
-                ) : isStreamingAnalysis && isPaused ? (
-                  <button
-                    onClick={togglePauseResume}
-                    className="flex-1 bg-green-500 text-white py-3 rounded-full text-lg font-semibold hover:bg-green-600 transition shadow-md"
-                  >
-                    Resume Analysis ▶️
-                  </button>
-                ) : null}
-                
-                <button
-                  onClick={closeCamera}
-                  className="flex-1 bg-red-500 text-white py-3 rounded-full text-lg font-semibold hover:bg-red-600 transition shadow-md"
-                >
-                  Close Camera ✖️
-                </button>
-              </div>
             </div> {/* End Left Column */}
 
             {/* Right Column: Live Analysis Insights */}
             {isStreamingAnalysis && (
-              <div className="flex flex-col flex-1 bg-purple-50 rounded-xl shadow-inner text-purple-800 p-4 overflow-y-auto"> {/* flex-1 and overflow-y-auto */}
+              <div className="flex flex-col flex-1 bg-purple-50 rounded-xl shadow-inner text-purple-800 p-4 overflow-y-auto">
                 <h3 className="text-lg font-semibold mb-1 text-center">Live Skin Insights</h3>
                 {liveResult ? (
                   <AnalysisResult result={liveResult} />
@@ -276,6 +250,32 @@ export default function HomePage() {
                 )}
               </div>
             )}
+
+            {/* Buttons: Positioned absolutely at the bottom center of the modal */}
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex justify-center space-x-4 w-full px-6 max-w-sm"> {/* Adjusted width and padding */}
+              {isStreamingAnalysis && !isPaused ? (
+                <button
+                  onClick={togglePauseResume}
+                  className="flex-1 bg-yellow-500 text-white py-2 px-4 rounded-full text-base font-semibold hover:bg-yellow-600 transition shadow-md"
+                >
+                  Pause ⏸️
+                </button>
+              ) : isStreamingAnalysis && isPaused ? (
+                <button
+                  onClick={togglePauseResume}
+                  className="flex-1 bg-green-500 text-white py-2 px-4 rounded-full text-base font-semibold hover:bg-green-600 transition shadow-md"
+                >
+                  Resume ▶️
+                </button>
+              ) : null}
+              
+              <button
+                onClick={closeCamera}
+                className="flex-1 bg-red-500 text-white py-2 px-4 rounded-full text-base font-semibold hover:bg-red-600 transition shadow-md"
+              >
+                Close ✖️
+              </button>
+            </div>
 
           </div> {/* End Main modal content box */}
         </div>
