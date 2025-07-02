@@ -15,13 +15,13 @@ export default function HomePage() {
   const [isStreamingAnalysis, setIsStreamingAnalysis] = useState<boolean>(false); // NEW: Indicates if live analysis is active
   const [error, setError] = useState<string | null>(null);
 
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null); // Corrected type for videoRef
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   // Main effect to manage camera stream and live analysis interval
   useEffect(() => {
     let stream: MediaStream | null = null;
-    let intervalId: NodeJS.Timeout | undefined; // Use NodeJS.Timeout for clarity with setInterval
+    let intervalId: NodeJS.Timeout | undefined;
 
     const initCamera = async () => {
       if (!videoRef.current || !showCamera) {
@@ -138,7 +138,7 @@ export default function HomePage() {
         formData.append('file', new File([blob], "live_frame.jpg", { type: "image/jpeg" }));
 
         // IMPORTANT: Use your actual backend URL (e.g., your local FastAPI or deployed Cloud Function)
-        const API_ENDPOINT = 'https://glowscan-backend-241128138627.us-central1.run.app/predict';
+        const API_ENDPOINT = 'https://glowscan-backend-241128138627.us-central1.run.app/predict'; 
 
         try {
           // No loading state for individual live frames, as it's continuous
@@ -204,8 +204,7 @@ export default function HomePage() {
     const formData = new FormData();
     formData.append('file', file);
 
-    const API_ENDPOINT = 'https://glowscan-backend-241128138627.us-central1.run.app/predict';
-
+    const API_ENDPOINT = 'https://glowscan-backend-241128138627.us-central1.run.app/predict'; 
 
     try {
       const response = await fetch(API_ENDPOINT, {
@@ -298,8 +297,8 @@ export default function HomePage() {
               <div className="mt-4 p-4 bg-purple-50 rounded-xl shadow-inner text-purple-800 text-center">
                 <h3 className="text-lg font-semibold mb-1">Live Skin Insights</h3>
                 {liveResult ? (
-                  // Display live result. You'll want to format this nicely later.
-                  <pre className="text-sm overflow-auto max-h-40">{JSON.stringify(liveResult, null, 2)}</pre>
+                  // Display live result using the AnalysisResult component
+                  <AnalysisResult result={liveResult} />
                 ) : (
                   <p>Analyzing live... 🔄</p>
                 )}
