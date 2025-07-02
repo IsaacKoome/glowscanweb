@@ -1,7 +1,7 @@
 // app/page.tsx
 "use client";
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react'; // Import useCallback
 import Link from 'next/link';
 import Image from 'next/image';
 import AnalysisResult from '../components/AnalysisResult'; // Make sure path is correct
@@ -13,11 +13,69 @@ export default function HomePage() {
   const [liveResult, setLiveResult] = useState<any | null>(null); // For continuous live analysis result
   const [loadingAnalysis, setLoadingAnalysis] = useState<boolean>(false); // For snapshot analysis loading
   const [isStreamingAnalysis, setIsStreamingAnalysis] = useState<boolean>(false); // Indicates if live analysis is active
-  const [isPaused, setIsPaused] = useState<boolean>(false); // NEW: State to control pausing live analysis
+  const [isPaused, setIsPaused] = useState<boolean>(false); // State to control pausing live analysis
   const [error, setError] = useState<string | null>(null);
 
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null); // Corrected type
   const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  // Function to capture a frame and send for live analysis
+  // Wrapped in useCallback to prevent unnecessary re-creation and avoid useEffect dependency issues
+  const sendFrameForLiveAnalysis = useCallback(async () => {
+    // Only send if not paused
+    if (isPaused) {
+      console.log("Live analysis paused. Not sending frame.");
+      return;
+    }
+
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+
+    if (!video || !canvas || video.readyState < 2) { // Ensure video is ready
+      console.warn("Live analysis: Video or canvas not ready.");
+      return;
+    }
+
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+
+    const context = canvas.getContext('2d');
+    if (context) {
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      canvas.toBlob(async (blob) => {
+        if (!blob) {
+          console.error("Failed to create blob from canvas.");
+          return;
+        }
+
+        const formData = new FormData();
+        formData.append('file', new File([blob], "live_frame.jpg", { type: "image/jpeg" }));
+
+        const API_ENDPOINT = 'https://glowscan-backend-241128138627.us-central1.run.app/predict'; 
+
+        try {
+          const response = await fetch(API_ENDPOINT, {
+            method: 'POST',
+            body: formData,
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json().catch(() => response.text());
+            console.error(`Live analysis HTTP Error! Status: ${response.status}. Details: ${JSON.stringify(errorData)}`);
+            return;
+          }
+
+          const result = await response.json();
+          setLiveResult(result); // Update the live result state
+          console.log("Live analysis result:", result);
+
+        } catch (err: any) {
+          console.error('Live analysis fetch error:', err);
+        }
+      }, 'image/jpeg', 0.8); // JPEG format with 80% quality
+    }
+  }, [isPaused]); // Dependency for useCallback: only recreate if isPaused changes
 
   // Main effect to manage camera stream and live analysis interval
   useEffect(() => {
@@ -107,7 +165,7 @@ export default function HomePage() {
       setIsStreamingAnalysis(false); // Ensure streaming analysis state is reset
       setIsPaused(false); // Ensure paused state is reset
     };
-  }, [showCamera, videoRef.current, isPaused]); // Added isPaused to dependencies to restart interval if unpaused
+  }, [showCamera, videoRef.current, isPaused, sendFrameForLiveAnalysis]); // Added sendFrameForLiveAnalysis to dependencies
 
 
   // Function to toggle pause/resume for live analysis
@@ -121,70 +179,12 @@ export default function HomePage() {
   };
 
 
-  // Function to capture a frame and send for live analysis
-  const sendFrameForLiveAnalysis = async () => {
-    // Only send if not paused
-    if (isPaused) {
-      console.log("Live analysis paused. Not sending frame.");
-      return;
-    }
-
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-
-    if (!video || !canvas || video.readyState < 2) { // Ensure video is ready
-      console.warn("Live analysis: Video or canvas not ready.");
-      return;
-    }
-
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-
-    const context = canvas.getContext('2d');
-    if (context) {
-      context.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-      canvas.toBlob(async (blob) => {
-        if (!blob) {
-          console.error("Failed to create blob from canvas.");
-          return;
-        }
-
-        const formData = new FormData();
-        formData.append('file', new File([blob], "live_frame.jpg", { type: "image/jpeg" }));
-
-        const API_ENDPOINT = 'https://glowscan-backend-241128138627.us-central1.run.app/predict'; 
-
-        try {
-          const response = await fetch(API_ENDPOINT, {
-            method: 'POST',
-            body: formData,
-          });
-
-          if (!response.ok) {
-            const errorData = await response.json().catch(() => response.text());
-            console.error(`Live analysis HTTP Error! Status: ${response.status}. Details: ${JSON.stringify(errorData)}`);
-            return;
-          }
-
-          const result = await response.json();
-          setLiveResult(result); // Update the live result state
-          console.log("Live analysis result:", result);
-
-        } catch (err: any) {
-          console.error('Live analysis fetch error:', err);
-        }
-      }, 'image/jpeg', 0.8); // JPEG format with 80% quality
-    }
-  };
-
   // Function to capture a single snapshot (for explicit capture button)
-  // This function is now only called when the user explicitly clicks "Capture Snapshot"
-  // from the main page (if you add such a button there later).
-  // It's no longer part of the live camera modal.
+  // This function is now commented out as it's not used in the current live analysis flow.
+  // If you wish to add a dedicated snapshot feature elsewhere (e.g., on the /upload page),
+  // you can uncomment and adapt this function there.
+  /*
   const captureSnapshot = async () => {
-    // This function can be moved or adapted if you want a dedicated snapshot feature elsewhere.
-    // For now, it's kept for completeness but not directly used in the live modal.
     const video = videoRef.current;
     const canvas = canvasRef.current;
 
@@ -207,11 +207,14 @@ export default function HomePage() {
       const blob = await (await fetch(imageDataUrl)).blob();
       const file = new File([blob], "snapshot.jpg", { type: "image/jpeg" });
 
-      handleAnalyzeSnapshot(file);
+      handleAnalyzeSnapshot(file); // Send this File object for analysis
     }
   };
+  */
 
   // Function to send the captured snapshot to the backend for analysis (snapshot-specific)
+  // This is still used by the (now commented out) captureSnapshot function,
+  // or if you re-introduce a snapshot feature elsewhere.
   const handleAnalyzeSnapshot = async (file: File) => {
     setLoadingAnalysis(true);
     setError(null);
@@ -310,7 +313,7 @@ export default function HomePage() {
             
             {/* Live Analysis Insights Display */}
             {isStreamingAnalysis && (
-              <div className="mt-4 p-4 bg-purple-50 rounded-xl shadow-inner text-purple-800 text-left"> {/* Changed text-center to text-left */}
+              <div className="mt-4 p-4 bg-purple-50 rounded-xl shadow-inner text-purple-800 text-left">
                 <h3 className="text-lg font-semibold mb-1 text-center">Live Skin Insights</h3>
                 {liveResult ? (
                   // Display live result using the AnalysisResult component
@@ -336,7 +339,7 @@ export default function HomePage() {
                 >
                   Resume Analysis ▶️
                 </button>
-              ) : null} {/* No button if not streaming */}
+              ) : null}
               
               <button
                 onClick={closeCamera}
