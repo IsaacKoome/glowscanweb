@@ -3,13 +3,12 @@
 import os
 from fastapi import FastAPI, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-# Ensure you have google-generativeai installed: pip install google-generativeai
 from google.generativeai import configure, GenerativeModel, upload_file
 import base64
 from io import BytesIO
 from PIL import Image
-import json # Ensure json module is imported
-import re # Import regex for parsing
+import json
+import re
 
 # ✅ 1. Initialize FastAPI
 app = FastAPI()
@@ -23,9 +22,6 @@ app.add_middleware(
 )
 
 # ✅ 3. Configure Gemini API
-# It's better to configure this once globally or use a client library that handles it.
-# For Google Cloud Run, you typically don't set API_KEY directly if using service accounts.
-# If you are using an API key, ensure it's set as an environment variable in Cloud Run.
 GOOGLE_API_KEY = os.getenv("GEMINI_API_KEY")
 if GOOGLE_API_KEY:
     configure(api_key=GOOGLE_API_KEY)
@@ -44,63 +40,63 @@ def root():
 async def predict(file: UploadFile = File(...)):
     print(f"Received file: {file.filename}, content_type: {file.content_type}")
     try:
-        # Read image bytes directly
         image_bytes = await file.read()
         
-        # Prepare image for Gemini.
-        # Gemini API expects image data in a specific format, not base64 string directly in parts.
-        # For direct API calls (which the Python SDK does), you can often pass bytes directly
-        # or use `upload_file` if you need to manage larger files or specific MIME types.
-        # Let's use the direct bytes method here for simplicity with `generate_content`.
-
-        # If you need to convert to PIL.Image first (e.g., for resizing/processing), then convert back to bytes for Gemini
-        # img = Image.open(BytesIO(image_bytes)).convert("RGB")
-        # # If you need to resize, do it here: img = img.resize((desired_width, desired_height))
-        # buffered = BytesIO()
-        # img.save(buffered, format="JPEG") # Save as JPEG for consistency
-        # gemini_image_part = {
-        #     "mime_type": "image/jpeg",
-        #     "data": buffered.getvalue() # Pass raw bytes, not base64 string
-        # }
-
-        # Simpler: pass the raw image bytes directly if Gemini accepts it (which it usually does for common types)
         gemini_image_part = {
-            "mime_type": file.content_type, # Use the content type from the uploaded file
+            "mime_type": file.content_type,
             "data": image_bytes
         }
 
-        # Prepare the prompt
+        # --- UPDATED PROMPT ---
         prompt = """
-You are a highly experienced and friendly AI skincare and makeup expert. Analyze the attached selfie and return a JSON object with the following keys:
-- "hydration": "...", // e.g. "low", "moderate", "high"
-- "acne": "...", // e.g. "none", "mild", "moderate", "severe"
-- "skin_tone": "...", // e.g. "fair", "medium", "dark", "neutral", etc.
-- "makeup_feedback": "..." // Detailed feedback on makeup (blend, color match, coverage, areas for improvement).
-- "overall_glow_score": number // An integer score from 1 to 10, where 10 is maximum glow.
+You are a highly experienced, friendly, and encouraging AI skincare and makeup expert named Glowscan AI. Your goal is to provide precise, actionable, and personalized feedback based on the user's selfie.
 
-Ensure the response is ONLY the JSON object, with no additional text or markdown formatting outside the JSON.
+Analyze the attached selfie for both skin health and makeup application. Provide your analysis as a JSON object with the following keys. Each field should contain concise, direct advice or observations.
+
+Expected JSON Structure:
+{
+  "hydration": "...", // e.g., "low", "moderate", "high"
+  "acne": "...", // e.g., "none", "mild (few blemishes)", "moderate (several active breakouts)", "severe (widespread breakouts)"
+  "redness": "...", // e.g., "none", "mild (slight flush)", "moderate (visible redness)", "significant (widespread inflammation)"
+  "skin_tone": "...", // e.g., "fair", "light", "medium", "dark", "deep"
+  "makeup_coverage": "...", // e.g., "light", "medium", "full", "no makeup detected"
+  "makeup_blend": "...", // e.g., "excellent", "good", "needs blending around jawline", "uneven on forehead", "no makeup detected"
+  "makeup_color_match": "...", // e.g., "perfect", "good", "slightly off (too warm)", "too light", "too dark", "no makeup detected"
+  "overall_glow_score": number, // An integer score from 1 to 10, where 10 is maximum glow and health.
+  "skincare_advice_tips": [ // An array of 2-3 specific, actionable skincare tips based on observations.
+    "Tip 1: ...",
+    "Tip 2: ..."
+  ],
+  "makeup_enhancement_tips": [ // An array of 2-3 specific, actionable makeup tips, including directional advice (e.g., "blend more on the left side"). If no makeup, suggest basic enhancements.
+    "Tip 1: ...",
+    "Tip 2: ..."
+  ],
+  "overall_summary": "..." // A brief, encouraging summary of the analysis.
+}
+
+Crucial Instructions:
+1.  **Output ONLY the JSON object.** Do not include any conversational text, markdown outside the JSON, or explanations before or after the JSON.
+2.  Be as specific as possible in `makeup_blend` and `makeup_color_match` feedback, noting *where* improvements are needed (e.g., "blend more around the nose," "foundation appears slightly too warm for your neck").
+3.  If no makeup is detected, state "no makeup detected" for relevant fields and provide general makeup enhancement tips.
+4.  For `skincare_advice_tips` and `makeup_enhancement_tips`, provide concise, actionable sentences.
 """
-        # Add a more specific instruction for JSON output
+        # --- END UPDATED PROMPT ---
+
         generation_config = {
             "response_mime_type": "application/json"
         }
 
-        # Send image and prompt to Gemini
-        # Use parts=[prompt, gemini_image_part]
         response = model.generate_content(
             contents=[prompt, gemini_image_part],
             generation_config=generation_config
         )
 
-        # Check if response.text is directly available and valid JSON
         if response.text:
             try:
-                # Attempt to parse directly if response_mime_type worked
                 result = json.loads(response.text)
                 print(f"Gemini response successfully parsed: {result}")
                 return result
             except json.JSONDecodeError:
-                # Fallback: If direct parse fails, try to extract JSON from markdown block
                 print("Gemini response not direct JSON, attempting to extract from markdown.")
                 json_match = re.search(r"```json\n(.*)\n```", response.text, re.DOTALL)
                 if json_match:
