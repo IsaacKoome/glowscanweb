@@ -5,11 +5,11 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import AnalysisResult from '../components/AnalysisResult'; // Make sure path is correct
-import { auth } from '../lib/firebase'; // Import auth instance
-import { User, onAuthStateChanged, signOut } from 'firebase/auth'; // Import User type, onAuthStateChanged, signOut
+// Removed auth imports as state is global now
 
 export default function HomePage() {
-  const [user, setUser] = useState<User | null>(null); // NEW: State to hold authenticated user
+  // Removed user state and its related useEffect
+  // const [user, setUser] = useState<User | null>(null); 
   const [showCamera, setShowCamera] = useState(false);
   const [capturedImagePreviewUrl, setCapturedImagePreviewUrl] = useState<string | null>(null);
   const [analysisResult, setAnalysisResult] = useState<any | null>(null); // For snapshot analysis result
@@ -21,16 +21,7 @@ export default function HomePage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  // --- NEW: useEffect to listen for Firebase Auth state changes ---
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-      // You can add more logic here, e.g., redirecting if user logs out
-    });
-
-    // Cleanup subscription on component unmount
-    return () => unsubscribe();
-  }, []); // Empty dependency array means this runs once on mount
+  // Removed useEffect for onAuthStateChanged
 
   // --- Function to send a frame for live analysis ---
   const sendFrameForLiveAnalysis = useCallback(async () => {
@@ -205,43 +196,14 @@ export default function HomePage() {
     setShowCamera(false);
   };
 
-  // NEW: Handle Logout
-  const handleLogout = async () => {
-    try {
-      await signOut(auth);
-      console.log("User signed out successfully.");
-      // Optionally redirect to login page or home page
-      // router.push('/login'); // If you want to force redirect to login
-    } catch (error) {
-      console.error("Error signing out:", error);
-      setError("Failed to log out. Please try again.");
-    }
-  };
+  // Removed handleLogout as it's now in AuthContext
 
   // handleAnalyzeSnapshot and captureSnapshot are commented out as before.
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[calc(100vh-128px)] bg-gradient-to-br from-pink-50 via-purple-50 to-blue-50 p-6 text-center">
-      <div className="max-w-3xl mx-auto py-12 px-6 bg-white rounded-3xl shadow-xl border border-gray-100 transform transition duration-500 hover:scale-105 relative"> {/* Added relative positioning */}
-        {/* NEW: Login/Logout Button */}
-        <div className="absolute top-4 right-4 z-10">
-          {user ? (
-            // User is logged in
-            <button
-              onClick={handleLogout}
-              className="bg-purple-500 text-white py-2 px-4 rounded-full text-lg font-semibold hover:bg-purple-600 transition shadow-md"
-            >
-              Logout 👋
-            </button>
-          ) : (
-            // User is not logged in
-            <Link href="/login" passHref>
-              <button className="bg-purple-500 text-white py-2 px-4 rounded-full text-lg font-semibold hover:bg-purple-600 transition shadow-md">
-                Login / Register 🔑
-              </button>
-            </Link>
-          )}
-        </div>
+      <div className="max-w-3xl mx-auto py-12 px-6 bg-white rounded-3xl shadow-xl border border-gray-100 transform transition duration-500 hover:scale-105 relative">
+        {/* Removed Login/Logout Button from here as it's now in RootLayout */}
 
         <h1 className="text-5xl font-extrabold text-purple-800 mb-6 leading-tight">
           Your Daily Beauty Mirror, Powered by AI ✨
