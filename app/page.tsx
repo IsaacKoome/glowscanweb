@@ -12,7 +12,7 @@ export default function HomePage() {
   const [analysisResult, setAnalysisResult] = useState<any | null>(null); // For snapshot analysis result
   const [liveResult, setLiveResult] = useState<any | null>(null); // For continuous live analysis result
   const [isStreamingAnalysis, setIsStreamingAnalysis] = useState<boolean>(false);
-  const [isPaused, setIsPaused] = useState<boolean>(false); // State to control pausing live analysis
+  const [isPaused, setIsPaused] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -20,8 +20,6 @@ export default function HomePage() {
 
   // --- Function to send a frame for live analysis ---
   const sendFrameForLiveAnalysis = useCallback(async () => {
-    // This check is now primarily handled by the interval management useEffect,
-    // but good to keep as a safeguard.
     if (isPaused) {
       console.log("Live analysis paused. Not sending frame.");
       return;
@@ -69,15 +67,14 @@ export default function HomePage() {
           setLiveResult(result); // Update the live result state
           console.log("Live analysis result:", result);
 
-          // --- NEW: Auto-pause after a successful analysis result is received ---
-          setIsPaused(true); 
+          setIsPaused(true); // Auto-pause after a successful analysis result is received
 
         } catch (err: any) {
           console.error('Live analysis fetch error:', err);
         }
       }, 'image/jpeg', 0.8); // JPEG format with 80% quality
     }
-  }, [isPaused]); // Dependency for useCallback: only recreate if isPaused changes
+  }, [isPaused]);
 
   // --- useEffect for Camera Stream Setup ---
   useEffect(() => {
@@ -119,11 +116,11 @@ export default function HomePage() {
           try {
             await videoRef.current?.play();
             console.log("Video playback started.");
-            setIsStreamingAnalysis(true); // Indicate that streaming is active
+            setIsStreamingAnalysis(true);
           } catch (playErr: any) {
             console.error("Error playing video stream:", playErr);
             setError("Failed to play camera stream. Is camera in use by another app?");
-            setShowCamera(false); // Close camera on playback error
+            setShowCamera(false);
           }
         };
         videoRef.current.load();
@@ -141,7 +138,7 @@ export default function HomePage() {
           message = `Camera error: ${err.message || err.name}.`;
         }
         setError(message);
-        setShowCamera(false); // Hide modal if camera access fails
+        setShowCamera(false);
       }
     };
 
@@ -155,8 +152,8 @@ export default function HomePage() {
         console.log("Stopping video tracks during cleanup.");
         stream.getTracks().forEach((track) => track.stop());
       }
-      setIsStreamingAnalysis(false); // Ensure streaming analysis state is reset
-      setIsPaused(false); // Ensure paused state is reset
+      setIsStreamingAnalysis(false);
+      setIsPaused(false);
     };
   }, [showCamera]); // Only depends on showCamera
 
@@ -241,12 +238,12 @@ export default function HomePage() {
       {showCamera && (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
           {/* Main modal content box: Now a flex container for two columns on medium screens and up */}
-          <div className="bg-white rounded-2xl p-6 shadow-xl w-full max-w-5xl h-[95vh] max-h-[800px] flex flex-col md:flex-row gap-6 relative"> {/* Increased h for mobile, max-h for desktop */}
+          <div className="bg-white rounded-2xl p-6 shadow-xl w-full max-w-5xl h-[95vh] max-h-[800px] flex flex-col md:flex-row gap-6 relative">
             
-            {/* Left Column: Camera Feed */}
+            {/* Left Column: Camera Feed & Controls */}
             <div className="flex flex-col flex-1">
               <h2 className="text-2xl font-bold mb-4 text-center text-purple-700">Live Camera Mirror 🤳</h2>
-              <div className="relative w-full aspect-video bg-gray-800 rounded-xl overflow-hidden mb-4 flex-grow">
+              <div className="relative w-full aspect-video bg-gray-800 rounded-xl overflow-hidden flex-grow"> {/* Removed mb-4, added flex-grow */}
                 <video 
                   ref={videoRef} 
                   className="w-full h-full object-cover" 
@@ -256,6 +253,32 @@ export default function HomePage() {
                   style={{ transform: 'scaleX(-1)' }} 
                 ></video>
                 <canvas ref={canvasRef} className="hidden"></canvas>
+
+                {/* Buttons: Positioned absolutely within the video container */}
+                <div className="absolute bottom-4 left-0 right-0 flex justify-between px-4"> {/* Adjusted positioning */}
+                  {isStreamingAnalysis && !isPaused ? (
+                    <button
+                      onClick={togglePauseResume}
+                      className="bg-yellow-500 text-white py-2 px-3 rounded-full text-sm font-semibold hover:bg-yellow-600 transition shadow-md"
+                    >
+                      Pause ⏸️
+                    </button>
+                  ) : isStreamingAnalysis && isPaused ? (
+                    <button
+                      onClick={togglePauseResume}
+                      className="bg-green-500 text-white py-2 px-3 rounded-full text-sm font-semibold hover:bg-green-600 transition shadow-md"
+                    >
+                      Resume ▶️
+                    </button>
+                  ) : null}
+                  
+                  <button
+                    onClick={closeCamera}
+                    className="bg-red-500 text-white py-2 px-3 rounded-full text-sm font-semibold hover:bg-red-600 transition shadow-md"
+                  >
+                    Close ✖️
+                  </button>
+                </div>
               </div>
             </div> {/* End Left Column */}
 
@@ -270,32 +293,6 @@ export default function HomePage() {
                 )}
               </div>
             )}
-
-            {/* Buttons: Positioned absolutely at the bottom center of the modal */}
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex justify-center space-x-4 w-full px-6 max-w-xs"> {/* max-w-xs to make them smaller */}
-              {isStreamingAnalysis && !isPaused ? (
-                <button
-                  onClick={togglePauseResume}
-                  className="flex-1 bg-yellow-500 text-white py-2 px-3 rounded-full text-sm font-semibold hover:bg-yellow-600 transition shadow-md"
-                >
-                  Pause ⏸️
-                </button>
-              ) : isStreamingAnalysis && isPaused ? (
-                <button
-                  onClick={togglePauseResume}
-                  className="flex-1 bg-green-500 text-white py-2 px-3 rounded-full text-sm font-semibold hover:bg-green-600 transition shadow-md"
-                >
-                  Resume ▶️
-                </button>
-              ) : null}
-              
-              <button
-                onClick={closeCamera}
-                className="flex-1 bg-red-500 text-white py-2 px-3 rounded-full text-sm font-semibold hover:bg-red-600 transition shadow-md"
-              >
-                Close ✖️
-              </button>
-            </div>
 
           </div> {/* End Main modal content box */}
         </div>
