@@ -12,14 +12,16 @@ export default function HomePage() {
   const [analysisResult, setAnalysisResult] = useState<any | null>(null); // For snapshot analysis result
   const [liveResult, setLiveResult] = useState<any | null>(null); // For continuous live analysis result
   const [isStreamingAnalysis, setIsStreamingAnalysis] = useState<boolean>(false);
-  const [isPaused, setIsPaused] = useState<boolean>(false);
+  const [isPaused, setIsPaused] = useState<boolean>(false); // State to control pausing live analysis
   const [error, setError] = useState<string | null>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  // Function to capture a frame and send for live analysis
+  // --- Function to send a frame for live analysis ---
   const sendFrameForLiveAnalysis = useCallback(async () => {
+    // This check is now primarily handled by the interval management useEffect,
+    // but good to keep as a safeguard.
     if (isPaused) {
       console.log("Live analysis paused. Not sending frame.");
       return;
@@ -64,20 +66,22 @@ export default function HomePage() {
           }
 
           const result = await response.json();
-          setLiveResult(result);
+          setLiveResult(result); // Update the live result state
           console.log("Live analysis result:", result);
+
+          // --- NEW: Auto-pause after a successful analysis result is received ---
+          setIsPaused(true); 
 
         } catch (err: any) {
           console.error('Live analysis fetch error:', err);
         }
-      }, 'image/jpeg', 0.8);
+      }, 'image/jpeg', 0.8); // JPEG format with 80% quality
     }
-  }, [isPaused]);
+  }, [isPaused]); // Dependency for useCallback: only recreate if isPaused changes
 
-  // Main effect to manage camera stream and live analysis interval
+  // --- useEffect for Camera Stream Setup ---
   useEffect(() => {
-    let stream: MediaStream | null = null;
-    let intervalId: NodeJS.Timeout | undefined;
+    let stream: MediaStream | null = null; // Local stream variable for cleanup
 
     const initCamera = async () => {
       if (!showCamera) {
@@ -87,9 +91,9 @@ export default function HomePage() {
 
       setCapturedImagePreviewUrl(null);
       setAnalysisResult(null);
-      setLiveResult(null);
+      setLiveResult(null); // Clear live results on new camera open
       setError(null);
-      setIsPaused(false);
+      setIsPaused(false); // Ensure not paused when camera first opens
 
       if (!videoRef.current) {
         console.warn("initCamera called, but videoRef.current is null. This should be caught by the dependent useEffect.");
@@ -115,18 +119,11 @@ export default function HomePage() {
           try {
             await videoRef.current?.play();
             console.log("Video playback started.");
-            setIsStreamingAnalysis(true);
-
-            if (!isPaused) {
-              intervalId = setInterval(() => {
-                sendFrameForLiveAnalysis();
-              }, 3000);
-            }
-
+            setIsStreamingAnalysis(true); // Indicate that streaming is active
           } catch (playErr: any) {
             console.error("Error playing video stream:", playErr);
             setError("Failed to play camera stream. Is camera in use by another app?");
-            setShowCamera(false);
+            setShowCamera(false); // Close camera on playback error
           }
         };
         videoRef.current.load();
@@ -144,7 +141,7 @@ export default function HomePage() {
           message = `Camera error: ${err.message || err.name}.`;
         }
         setError(message);
-        setShowCamera(false);
+        setShowCamera(false); // Hide modal if camera access fails
       }
     };
 
@@ -152,20 +149,43 @@ export default function HomePage() {
       initCamera();
     }
 
+    // Cleanup for camera stream
     return () => {
       if (stream) {
         console.log("Stopping video tracks during cleanup.");
         stream.getTracks().forEach((track) => track.stop());
       }
+      setIsStreamingAnalysis(false); // Ensure streaming analysis state is reset
+      setIsPaused(false); // Ensure paused state is reset
+    };
+  }, [showCamera]); // Only depends on showCamera
+
+  // --- useEffect for Live Analysis Interval Management ---
+  useEffect(() => {
+    let intervalId: NodeJS.Timeout | undefined;
+
+    if (isStreamingAnalysis && !isPaused) {
+      console.log("Starting live analysis interval.");
+      intervalId = setInterval(() => {
+        sendFrameForLiveAnalysis();
+      }, 3000);
+    } else {
+      console.log("Stopping live analysis interval (paused or not streaming).");
       if (intervalId) {
-        console.log("Clearing live analysis interval.");
         clearInterval(intervalId);
       }
-      setIsStreamingAnalysis(false);
-      setIsPaused(false);
-    };
-  }, [showCamera, isPaused, sendFrameForLiveAnalysis]);
+    }
 
+    // Cleanup for interval
+    return () => {
+      if (intervalId) {
+        console.log("Clearing interval on cleanup.");
+        clearInterval(intervalId);
+      }
+    };
+  }, [isStreamingAnalysis, isPaused, sendFrameForLiveAnalysis]); // Depends on these states/functions
+
+  // --- Other functions ---
   const togglePauseResume = () => {
     setIsPaused(prev => !prev);
   };
@@ -221,12 +241,12 @@ export default function HomePage() {
       {showCamera && (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
           {/* Main modal content box: Now a flex container for two columns on medium screens and up */}
-          <div className="bg-white rounded-2xl p-6 shadow-xl w-full max-w-5xl h-[90vh] max-h-[800px] flex flex-col md:flex-row gap-6 relative"> {/* Added relative for absolute positioning of buttons */}
+          <div className="bg-white rounded-2xl p-6 shadow-xl w-full max-w-5xl h-[95vh] max-h-[800px] flex flex-col md:flex-row gap-6 relative"> {/* Increased h for mobile, max-h for desktop */}
             
             {/* Left Column: Camera Feed */}
             <div className="flex flex-col flex-1">
               <h2 className="text-2xl font-bold mb-4 text-center text-purple-700">Live Camera Mirror 🤳</h2>
-              <div className="relative w-full aspect-video bg-gray-800 rounded-xl overflow-hidden mb-4 flex-grow"> {/* flex-grow to take available vertical space */}
+              <div className="relative w-full aspect-video bg-gray-800 rounded-xl overflow-hidden mb-4 flex-grow">
                 <video 
                   ref={videoRef} 
                   className="w-full h-full object-cover" 
@@ -252,18 +272,18 @@ export default function HomePage() {
             )}
 
             {/* Buttons: Positioned absolutely at the bottom center of the modal */}
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex justify-center space-x-4 w-full px-6 max-w-sm"> {/* Adjusted width and padding */}
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex justify-center space-x-4 w-full px-6 max-w-xs"> {/* max-w-xs to make them smaller */}
               {isStreamingAnalysis && !isPaused ? (
                 <button
                   onClick={togglePauseResume}
-                  className="flex-1 bg-yellow-500 text-white py-2 px-4 rounded-full text-base font-semibold hover:bg-yellow-600 transition shadow-md"
+                  className="flex-1 bg-yellow-500 text-white py-2 px-3 rounded-full text-sm font-semibold hover:bg-yellow-600 transition shadow-md"
                 >
                   Pause ⏸️
                 </button>
               ) : isStreamingAnalysis && isPaused ? (
                 <button
                   onClick={togglePauseResume}
-                  className="flex-1 bg-green-500 text-white py-2 px-4 rounded-full text-base font-semibold hover:bg-green-600 transition shadow-md"
+                  className="flex-1 bg-green-500 text-white py-2 px-3 rounded-full text-sm font-semibold hover:bg-green-600 transition shadow-md"
                 >
                   Resume ▶️
                 </button>
@@ -271,7 +291,7 @@ export default function HomePage() {
               
               <button
                 onClick={closeCamera}
-                className="flex-1 bg-red-500 text-white py-2 px-4 rounded-full text-base font-semibold hover:bg-red-600 transition shadow-md"
+                className="flex-1 bg-red-500 text-white py-2 px-3 rounded-full text-sm font-semibold hover:bg-red-600 transition shadow-md"
               >
                 Close ✖️
               </button>
