@@ -183,7 +183,7 @@ export default function HomePage() {
           Your Daily Beauty Mirror, Powered by AI ✨
         </h1>
         <p className="text-xl text-gray-700 mb-8 max-w-2xl mx-auto">
-          Uncover the secrets to radiant skin and flawless makeup with Glowscan AI. Your personal beauty companion, right in your pocket.
+          Uncover the secrets to radiant skin and flawless makeup with WonderJoy AI. Your personal beauty companion, right in your pocket.
         </p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">

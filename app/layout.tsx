@@ -5,8 +5,8 @@ import Link from 'next/link';
 import './globals.css';
 
 export const metadata = {
-  title: 'Glowscan AI',
-  description: 'AI-powered skin analysis and beauty assistant',
+  title: 'WonderJoy AI',
+  description: 'AI-powered skin analysis and beauty assistant'
 };
 
 export default function RootLayout({ children}: {children: React.ReactNode})  {
@@ -16,7 +16,7 @@ export default function RootLayout({ children}: {children: React.ReactNode})  {
         <header className="bg-gradient-to-r from-pink-500 to-purple-600 shadow-lg p-4">
           <div className="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-center px-4">
             <Link href="/" className="text-3xl font-extrabold text-white mb-2 sm:mb-0 hover:opacity-90 transition-opacity">
-                Glowscan AI ✨
+                WonderJoy AI ✨
             </Link>
             <nav className="flex space-x-6">
               <Link href="/" 
