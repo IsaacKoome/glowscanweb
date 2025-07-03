@@ -5,8 +5,11 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import AnalysisResult from '../components/AnalysisResult'; // Make sure path is correct
+import { auth } from '../lib/firebase'; // Import auth instance
+import { User, onAuthStateChanged, signOut } from 'firebase/auth'; // Import User type, onAuthStateChanged, signOut
 
 export default function HomePage() {
+  const [user, setUser] = useState<User | null>(null); // NEW: State to hold authenticated user
   const [showCamera, setShowCamera] = useState(false);
   const [capturedImagePreviewUrl, setCapturedImagePreviewUrl] = useState<string | null>(null);
   const [analysisResult, setAnalysisResult] = useState<any | null>(null); // For snapshot analysis result
@@ -17,6 +20,17 @@ export default function HomePage() {
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  // --- NEW: useEffect to listen for Firebase Auth state changes ---
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      // You can add more logic here, e.g., redirecting if user logs out
+    });
+
+    // Cleanup subscription on component unmount
+    return () => unsubscribe();
+  }, []); // Empty dependency array means this runs once on mount
 
   // --- Function to send a frame for live analysis ---
   const sendFrameForLiveAnalysis = useCallback(async () => {
@@ -155,7 +169,7 @@ export default function HomePage() {
       setIsStreamingAnalysis(false);
       setIsPaused(false);
     };
-  }, [showCamera]); // Only depends on showCamera
+  }, [showCamera]);
 
   // --- useEffect for Live Analysis Interval Management ---
   useEffect(() => {
@@ -191,11 +205,44 @@ export default function HomePage() {
     setShowCamera(false);
   };
 
+  // NEW: Handle Logout
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      console.log("User signed out successfully.");
+      // Optionally redirect to login page or home page
+      // router.push('/login'); // If you want to force redirect to login
+    } catch (error) {
+      console.error("Error signing out:", error);
+      setError("Failed to log out. Please try again.");
+    }
+  };
+
   // handleAnalyzeSnapshot and captureSnapshot are commented out as before.
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[calc(100vh-128px)] bg-gradient-to-br from-pink-50 via-purple-50 to-blue-50 p-6 text-center">
-      <div className="max-w-3xl mx-auto py-12 px-6 bg-white rounded-3xl shadow-xl border border-gray-100 transform transition duration-500 hover:scale-105">
+      <div className="max-w-3xl mx-auto py-12 px-6 bg-white rounded-3xl shadow-xl border border-gray-100 transform transition duration-500 hover:scale-105 relative"> {/* Added relative positioning */}
+        {/* NEW: Login/Logout Button */}
+        <div className="absolute top-4 right-4 z-10">
+          {user ? (
+            // User is logged in
+            <button
+              onClick={handleLogout}
+              className="bg-purple-500 text-white py-2 px-4 rounded-full text-lg font-semibold hover:bg-purple-600 transition shadow-md"
+            >
+              Logout 👋
+            </button>
+          ) : (
+            // User is not logged in
+            <Link href="/login" passHref>
+              <button className="bg-purple-500 text-white py-2 px-4 rounded-full text-lg font-semibold hover:bg-purple-600 transition shadow-md">
+                Login / Register 🔑
+              </button>
+            </Link>
+          )}
+        </div>
+
         <h1 className="text-5xl font-extrabold text-purple-800 mb-6 leading-tight">
           Your Daily Beauty Mirror, Powered by AI ✨
         </h1>
@@ -237,13 +284,12 @@ export default function HomePage() {
       {/* Camera Modal */}
       {showCamera && (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
-          {/* Main modal content box: Now a flex container for two columns on medium screens and up */}
           <div className="bg-white rounded-2xl p-6 shadow-xl w-full max-w-5xl h-[95vh] max-h-[800px] flex flex-col md:flex-row gap-6 relative">
             
             {/* Left Column: Camera Feed & Controls */}
             <div className="flex flex-col flex-1">
               <h2 className="text-2xl font-bold mb-4 text-center text-purple-700">Live Camera Mirror 🤳</h2>
-              <div className="relative w-full aspect-video bg-gray-800 rounded-xl overflow-hidden flex-grow"> {/* Removed mb-4, added flex-grow */}
+              <div className="relative w-full aspect-video bg-gray-800 rounded-xl overflow-hidden flex-grow">
                 <video 
                   ref={videoRef} 
                   className="w-full h-full object-cover" 
@@ -255,7 +301,7 @@ export default function HomePage() {
                 <canvas ref={canvasRef} className="hidden"></canvas>
 
                 {/* Buttons: Positioned absolutely within the video container */}
-                <div className="absolute bottom-4 left-0 right-0 flex justify-between px-4"> {/* Adjusted positioning */}
+                <div className="absolute bottom-4 left-0 right-0 flex justify-between px-4">
                   {isStreamingAnalysis && !isPaused ? (
                     <button
                       onClick={togglePauseResume}
