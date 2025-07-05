@@ -14,8 +14,6 @@ export default function HeaderNavClient() {
   }
 
   return (
-    // This div will be directly rendered by the server component layout.tsx
-    // Its children will then be hydrated on the client.
     <div className="flex flex-col sm:flex-row items-center space-x-0 sm:space-x-6 w-full sm:w-auto">
       {/* Navigation Links */}
       <nav className="flex space-x-6 mb-2 sm:mb-0"> {/* Added mb-2 for spacing on mobile */}
@@ -28,9 +26,16 @@ export default function HeaderNavClient() {
         <Link href="/tips"
           className="text-white text-lg font-semibold hover:text-pink-200 transition-colors">Tips
         </Link>
+
+        {/* NEW: Profile Link - only show if user is logged in */}
+        {user && (
+          <Link href={`/profile/${user.uid}`} 
+          className="text-white text-lg font-semibold hover:text-pink-200 transition-colors">Profile 👤
+          </Link>
+        )}
       </nav>
 
-      {/* Auth Button - pushed to the right within this flex container */}
+      {/* Auth Button - pushed to the far right within this flex container */}
       <div className="ml-0 sm:ml-auto"> {/* ml-auto on sm screens to push right, ml-0 on mobile */}
         {user ? (
           // User is logged in
