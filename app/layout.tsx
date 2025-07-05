@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import './globals.css';
 import { AuthProvider, useAuth } from '../context/AuthContext'; // Import AuthProvider and useAuth
- // Import useEffect for client-side rendering of AuthButton
+// import { useEffect } from 'react'; // REMOVED: useEffect is not directly used in RootLayout
 
 export const metadata = {
   title: 'WonderJoy AI',
@@ -52,20 +52,18 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <Link href="/" className="text-3xl font-extrabold text-white mb-2 sm:mb-0 hover:opacity-90 transition-opacity">
                 WonderJoy AI ✨
               </Link>
-              <nav className="flex space-x-6"> {/* Removed items-center from nav, it's handled by parent div */}
+              <nav className="flex space-x-6">
                 <Link href="/" 
                 className="text-white text-lg font-semibold hover:text-pink-200 transition-colors">Home
                 </Link>
                 <Link href="/upload" 
                 className="text-white text-lg font-semibold hover:text-pink-200 transition-colors">Upload
                 </Link>
-                {/* Profile link is now handled by AuthButton for dynamic UID, or can be added here if always visible */}
                 <Link href="/tips"
                   className="text-white text-lg font-semibold hover:text-pink-200 transition-colors">Tips
                 </Link>
-                {/* AuthButton is now a sibling of nav, within the main header flex container */}
               </nav>
-              <AuthButton /> {/* Moved AuthButton outside of <nav> */}
+              <AuthButton />
             </div>
           </header>
           <main className="min-h-screen">
@@ -77,7 +75,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <p className="mt-2 text-gray-400">Innovating beauty with intelligence. 🌟</p>
             </div>
           </footer>
-        </AuthProvider> {/* Close AuthProvider */}
+        </AuthProvider>
       </body>
     </html>
   );
