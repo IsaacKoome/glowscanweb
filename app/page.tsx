@@ -4,24 +4,26 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import AnalysisResult from '../components/AnalysisResult';
+import AnalysisResult from '../components/AnalysisResult'; // Make sure path is correct
+import { useAuth } from '../context/AuthContext'; // NEW: Import useAuth hook
 
 export default function HomePage() {
+  const { user, loading: authLoading } = useAuth(); // NEW: Get user and authLoading from AuthContext
   const [showCamera, setShowCamera] = useState(false);
   const [capturedImagePreviewUrl, setCapturedImagePreviewUrl] = useState<string | null>(null);
-  const [analysisResult, setAnalysisResult] = useState<any | null>(null);
-  const [liveResult, setLiveResult] = useState<any | null>(null);
+  const [analysisResult, setAnalysisResult] = useState<any | null>(null); // For snapshot analysis result
+  const [liveResult, setLiveResult] = useState<any | null>(null); // For continuous live analysis result
   const [isStreamingAnalysis, setIsStreamingAnalysis] = useState<boolean>(false);
   const [isPaused, setIsPaused] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [cameraStatus, setCameraStatus] = useState<'idle' | 'loading' | 'playing' | 'error'>('idle'); // NEW: More detailed camera status
+  const [cameraStatus, setCameraStatus] = useState<'idle' | 'loading' | 'playing' | 'error'>('idle');
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   // --- Function to send a frame for live analysis ---
   const sendFrameForLiveAnalysis = useCallback(async () => {
-    if (isPaused || cameraStatus !== 'playing') { // Only send if not paused AND camera is playing
+    if (isPaused || cameraStatus !== 'playing') {
       console.log("Live analysis skipped: paused or camera not playing.");
       return;
     }
@@ -75,7 +77,7 @@ export default function HomePage() {
         }
       }, 'image/jpeg', 0.8);
     }
-  }, [isPaused, cameraStatus]); // Added cameraStatus to dependencies
+  }, [isPaused, cameraStatus]);
 
   // --- useEffect for Camera Stream Setup ---
   useEffect(() => {
@@ -84,7 +86,7 @@ export default function HomePage() {
     const initCamera = async () => {
       if (!showCamera) {
         console.log("initCamera: showCamera is false. Not initializing camera.");
-        setCameraStatus('idle'); // Reset status
+        setCameraStatus('idle');
         return;
       }
 
@@ -93,7 +95,7 @@ export default function HomePage() {
       setLiveResult(null);
       setError(null);
       setIsPaused(false);
-      setCameraStatus('loading'); // Set status to loading
+      setCameraStatus('loading');
 
       if (!videoRef.current) {
         console.warn("initCamera called, but videoRef.current is null.");
@@ -103,12 +105,10 @@ export default function HomePage() {
       }
 
       try {
-        // Start with simpler constraints for broader compatibility
         const constraints: MediaStreamConstraints = {
           video: {
             facingMode: 'user',
-            // Try simpler constraints first, if this works, we can try higher 'ideal' values
-            width: { ideal: 1280 }, // Lowering ideal resolution slightly for broader compatibility
+            width: { ideal: 1280 },
             height: { ideal: 720 }
           }
         };
@@ -119,14 +119,13 @@ export default function HomePage() {
 
         videoRef.current.srcObject = stream;
         
-        // Use onCanPlay to ensure video is ready before attempting to play
         videoRef.current.oncanplay = async () => {
           console.log("Video is ready to play (oncanplay event).");
           try {
             await videoRef.current?.play();
             console.log("Video playback initiated successfully.");
-            setCameraStatus('playing'); // Video is now playing
-            setIsStreamingAnalysis(true); // Start analysis when video is confirmed playing
+            setCameraStatus('playing');
+            setIsStreamingAnalysis(true);
           } catch (playErr: any) {
             console.error("Error playing video stream after oncanplay:", playErr);
             setCameraStatus('error');
@@ -135,7 +134,6 @@ export default function HomePage() {
           }
         };
 
-        // Listen for errors during playback
         videoRef.current.onerror = (event) => {
           console.error("Video element error event:", event);
           setCameraStatus('error');
@@ -143,13 +141,11 @@ export default function HomePage() {
           setShowCamera(false);
         };
 
-        // If oncanplay doesn't fire, metadata might still be useful, but oncanplay is preferred
         videoRef.current.onloadedmetadata = () => {
           console.log("Video metadata loaded (onloadedmetadata event).");
-          // No direct play() here, oncanplay will handle it
         };
 
-        videoRef.current.load(); // Ensure video element attempts to load the stream
+        videoRef.current.load();
 
       } catch (err: any) {
         console.error('Error accessing camera in initCamera:', err);
@@ -173,7 +169,6 @@ export default function HomePage() {
       initCamera();
     }
 
-    // Cleanup for camera stream
     return () => {
       if (stream) {
         console.log("Stopping video tracks during cleanup.");
@@ -181,15 +176,14 @@ export default function HomePage() {
       }
       setIsStreamingAnalysis(false);
       setIsPaused(false);
-      setCameraStatus('idle'); // Reset status on cleanup
+      setCameraStatus('idle');
     };
-  }, [showCamera]); // Only depends on showCamera
+  }, [showCamera]);
 
   // --- useEffect for Live Analysis Interval Management ---
   useEffect(() => {
     let intervalId: NodeJS.Timeout | undefined;
 
-    // Only start interval if camera is playing and not paused
     if (isStreamingAnalysis && cameraStatus === 'playing' && !isPaused) {
       console.log("Starting live analysis interval.");
       intervalId = setInterval(() => {
@@ -202,7 +196,6 @@ export default function HomePage() {
       }
     }
 
-    // Cleanup for interval
     return () => {
       if (intervalId) {
         console.log("Clearing interval on cleanup.");
@@ -261,12 +254,22 @@ export default function HomePage() {
         <Link href="/upload" className="inline-flex items-center justify-center bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold py-4 px-10 rounded-full text-2xl shadow-lg transition duration-300 ease-in-out transform hover:scale-105 hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-purple-300">
           Upload Image from Files 📂
         </Link>
+
+        {/* NEW: Link to User Profile if logged in */}
+        {!authLoading && user && (
+          <div className="mt-8">
+            <Link href={`/profile/${user.uid}`} passHref>
+              <button className="inline-flex items-center justify-center bg-gradient-to-r from-blue-500 to-green-500 text-white font-bold py-4 px-10 rounded-full text-2xl shadow-lg transition duration-300 ease-in-out transform hover:scale-105 hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-blue-300">
+                View My Profile 👤
+              </button>
+            </Link>
+          </div>
+        )}
       </div>
 
       {/* Camera Modal */}
       {showCamera && (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-0 md:p-4">
-          {/* Main modal content box: Now full screen on mobile, modal on desktop */}
           <div className="bg-white rounded-none md:rounded-2xl p-4 md:p-6 shadow-xl w-full h-screen max-h-screen flex flex-col md:flex-row gap-4 md:gap-6 relative">
             
             {/* Left Column: Camera Feed & Controls */}
@@ -296,7 +299,7 @@ export default function HomePage() {
                 )}
                 <video 
                   ref={videoRef} 
-                  className={`w-full h-full object-cover ${cameraStatus !== 'playing' ? 'hidden' : ''}`} // Hide video until playing
+                  className={`w-full h-full object-cover ${cameraStatus !== 'playing' ? 'hidden' : ''}`}
                   autoPlay 
                   playsInline 
                   muted 
@@ -305,7 +308,7 @@ export default function HomePage() {
                 <canvas ref={canvasRef} className="hidden"></canvas>
 
                 {/* Buttons: Positioned absolutely within the video container */}
-                {cameraStatus === 'playing' && ( // Only show buttons when video is playing
+                {cameraStatus === 'playing' && (
                   <div className="absolute bottom-4 left-0 right-0 flex justify-between px-4">
                     {isStreamingAnalysis && !isPaused ? (
                       <button
