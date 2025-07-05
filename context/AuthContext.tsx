@@ -2,47 +2,45 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User, onAuthStateChanged, signOut as firebaseSignOut } from 'firebase/auth'; // Renamed signOut to avoid conflict
-import { auth } from '../lib/firebase'; // Import your auth instance
+import { User, onAuthStateChanged, signOut as firebaseSignOut } from 'firebase/auth';
+import { auth } from '../lib/firebase';
 import { useRouter } from 'next/navigation';
 
-// Define the shape of our AuthContext
 interface AuthContextType {
   user: User | null;
-  loading: boolean; // To indicate if auth state is still being loaded
+  loading: boolean;
   logout: () => Promise<void>;
 }
 
-// Create the context
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Create the AuthProvider component
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true); // Start as loading
+  const [loading, setLoading] = useState(true);
   const router = useRouter();
 
   useEffect(() => {
-    // Listen for authentication state changes
+    console.log("AuthContext: useEffect running, setting up onAuthStateChanged listener.");
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      console.log("AuthContext: onAuthStateChanged fired. currentUser:", currentUser ? currentUser.email : "null");
       setUser(currentUser);
       setLoading(false); // Auth state has been determined
+      console.log("AuthContext: loading set to false.");
     });
 
-    // Cleanup subscription on component unmount
-    return () => unsubscribe();
-  }, []); // Empty dependency array means this runs once on mount
+    return () => {
+      console.log("AuthContext: useEffect cleanup, unsubscribing from onAuthStateChanged.");
+      unsubscribe();
+    };
+  }, []);
 
-  // Logout function
   const logout = async () => {
     try {
       await firebaseSignOut(auth);
-      // Firebase's onAuthStateChanged listener will automatically update the user state to null
       console.log("User signed out successfully.");
-      router.push('/login'); // Redirect to login page after logout
+      router.push('/login');
     } catch (error) {
       console.error("Error signing out:", error);
-      // You could set an error state here if needed
     }
   };
 
@@ -53,7 +51,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 }
 
-// Custom hook to use the AuthContext
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {

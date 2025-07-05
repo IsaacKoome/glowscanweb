@@ -21,6 +21,11 @@ export default function HomePage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
+  // NEW: Debugging log for auth state on homepage
+  useEffect(() => {
+    console.log("HomePage: authLoading state:", authLoading, "User:", user ? user.email : "null");
+  }, [authLoading, user]);
+
   // --- Function to send a frame for live analysis ---
   const sendFrameForLiveAnalysis = useCallback(async () => {
     if (isPaused || cameraStatus !== 'playing') {
