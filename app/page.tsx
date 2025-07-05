@@ -8,7 +8,6 @@ import AnalysisResult from '../components/AnalysisResult'; // Make sure path is 
 // No need to import auth here, it's handled by AuthContext in layout.tsx
 
 export default function HomePage() {
-  // Removed user state and its related useEffect as it's now global via AuthContext
   const [showCamera, setShowCamera] = useState(false);
   const [capturedImagePreviewUrl, setCapturedImagePreviewUrl] = useState<string | null>(null);
   const [analysisResult, setAnalysisResult] = useState<any | null>(null); // For snapshot analysis result
@@ -16,6 +15,7 @@ export default function HomePage() {
   const [isStreamingAnalysis, setIsStreamingAnalysis] = useState<boolean>(false);
   const [isPaused, setIsPaused] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [isVideoPlaying, setIsVideoPlaying] = useState(false); // NEW: State to track video playback
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -93,6 +93,7 @@ export default function HomePage() {
       setLiveResult(null); // Clear live results on new camera open
       setError(null);
       setIsPaused(false); // Ensure not paused when camera first opens
+      setIsVideoPlaying(false); // NEW: Reset video playing state
 
       if (!videoRef.current) {
         console.warn("initCamera called, but videoRef.current is null. This should be caught by the dependent useEffect.");
@@ -103,7 +104,7 @@ export default function HomePage() {
         const constraints: MediaStreamConstraints = {
           video: {
             facingMode: 'user',
-            width: { ideal: 1920 },
+            width: { ideal: 1920 }, // Request high resolution
             height: { ideal: 1080 }
           }
         };
@@ -113,19 +114,36 @@ export default function HomePage() {
         console.log("Camera stream obtained:", stream);
 
         videoRef.current.srcObject = stream;
+        
+        // Listen for when video starts playing
+        videoRef.current.onplaying = () => {
+          console.log("Video is now playing.");
+          setIsVideoPlaying(true);
+          setIsStreamingAnalysis(true); // Start streaming analysis when video plays
+        };
+
+        // Listen for errors during playback
+        videoRef.current.onerror = (event) => {
+          console.error("Video playback error:", event);
+          setError("Video playback failed. Please check camera permissions or try another browser.");
+          setIsVideoPlaying(false);
+          setShowCamera(false);
+        };
+
         videoRef.current.onloadedmetadata = async () => {
           console.log("Video metadata loaded.");
           try {
             await videoRef.current?.play();
-            console.log("Video playback started.");
-            setIsStreamingAnalysis(true);
+            console.log("Attempted video playback.");
+            // onplaying event will handle setting isVideoPlaying and isStreamingAnalysis
           } catch (playErr: any) {
             console.error("Error playing video stream:", playErr);
-            setError("Failed to play camera stream. Is camera in use by another app?");
+            setError("Failed to play camera stream. Is camera in use by another app or permissions denied?");
+            setIsVideoPlaying(false);
             setShowCamera(false);
           }
         };
-        videoRef.current.load();
+        videoRef.current.load(); // Ensure video element attempts to load the stream
 
       } catch (err: any) {
         console.error('Error accessing camera in initCamera:', err);
@@ -140,6 +158,7 @@ export default function HomePage() {
           message = `Camera error: ${err.message || err.name}.`;
         }
         setError(message);
+        setIsVideoPlaying(false); // NEW: Ensure video playing state is false on error
         setShowCamera(false);
       }
     };
@@ -156,6 +175,7 @@ export default function HomePage() {
       }
       setIsStreamingAnalysis(false);
       setIsPaused(false);
+      setIsVideoPlaying(false); // NEW: Reset video playing state on cleanup
     };
   }, [showCamera]);
 
@@ -163,13 +183,14 @@ export default function HomePage() {
   useEffect(() => {
     let intervalId: NodeJS.Timeout | undefined;
 
-    if (isStreamingAnalysis && !isPaused) {
+    // Only start interval if video is playing and not paused
+    if (isStreamingAnalysis && isVideoPlaying && !isPaused) { // NEW: Added isVideoPlaying condition
       console.log("Starting live analysis interval.");
       intervalId = setInterval(() => {
         sendFrameForLiveAnalysis();
       }, 3000);
     } else {
-      console.log("Stopping live analysis interval (paused or not streaming).");
+      console.log("Stopping live analysis interval (paused, not streaming, or video not playing).");
       if (intervalId) {
         clearInterval(intervalId);
       }
@@ -182,7 +203,7 @@ export default function HomePage() {
         clearInterval(intervalId);
       }
     };
-  }, [isStreamingAnalysis, isPaused, sendFrameForLiveAnalysis]);
+  }, [isStreamingAnalysis, isPaused, isVideoPlaying, sendFrameForLiveAnalysis]); // NEW: Added isVideoPlaying to dependencies
 
   // --- Other functions ---
   const togglePauseResume = () => {
@@ -238,17 +259,27 @@ export default function HomePage() {
 
       {/* Camera Modal */}
       {showCamera && (
-        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-0 md:p-4"> {/* Changed p-4 to p-0 for mobile full screen */}
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-0 md:p-4">
           {/* Main modal content box: Now full screen on mobile, modal on desktop */}
-          <div className="bg-white rounded-none md:rounded-2xl p-4 md:p-6 shadow-xl w-full h-screen max-h-screen flex flex-col md:flex-row gap-4 md:gap-6 relative"> {/* Adjusted padding, rounded corners, height for full screen on mobile */}
+          <div className="bg-white rounded-none md:rounded-2xl p-4 md:p-6 shadow-xl w-full h-screen max-h-screen flex flex-col md:flex-row gap-4 md:gap-6 relative">
             
             {/* Left Column: Camera Feed & Controls */}
             <div className="flex flex-col flex-1">
               <h2 className="text-2xl font-bold mb-4 text-center text-purple-700">Live Camera Mirror 🤳</h2>
-              <div className="relative w-full aspect-video bg-gray-800 rounded-xl overflow-hidden flex-grow">
+              <div className="relative w-full aspect-video bg-gray-800 rounded-xl overflow-hidden flex-grow flex items-center justify-center"> {/* Added flex, items-center, justify-center */}
+                {/* Conditionally render video or loading spinner */}
+                {!isVideoPlaying && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-gray-900 text-white text-xl">
+                    <svg className="animate-spin h-8 w-8 text-white mr-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Loading Camera...
+                  </div>
+                )}
                 <video 
                   ref={videoRef} 
-                  className="w-full h-full object-cover" 
+                  className={`w-full h-full object-cover ${!isVideoPlaying ? 'hidden' : ''}`} // Hide video until playing
                   autoPlay 
                   playsInline 
                   muted 
