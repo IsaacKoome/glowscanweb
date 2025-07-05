@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import './globals.css';
 import { AuthProvider, useAuth } from '../context/AuthContext'; // Import AuthProvider and useAuth
-import { useEffect } from 'react'; // Import useEffect for client-side rendering of AuthButton
+ // Import useEffect for client-side rendering of AuthButton
 
 export const metadata = {
   title: 'WonderJoy AI',
