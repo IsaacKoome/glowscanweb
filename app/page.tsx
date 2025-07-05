@@ -4,29 +4,25 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import AnalysisResult from '../components/AnalysisResult'; // Make sure path is correct
-// Removed auth imports as state is global now
+import AnalysisResult from '../components/AnalysisResult';
 
 export default function HomePage() {
-  // Removed user state and its related useEffect
-  // const [user, setUser] = useState<User | null>(null); 
   const [showCamera, setShowCamera] = useState(false);
   const [capturedImagePreviewUrl, setCapturedImagePreviewUrl] = useState<string | null>(null);
-  const [analysisResult, setAnalysisResult] = useState<any | null>(null); // For snapshot analysis result
-  const [liveResult, setLiveResult] = useState<any | null>(null); // For continuous live analysis result
+  const [analysisResult, setAnalysisResult] = useState<any | null>(null);
+  const [liveResult, setLiveResult] = useState<any | null>(null);
   const [isStreamingAnalysis, setIsStreamingAnalysis] = useState<boolean>(false);
   const [isPaused, setIsPaused] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [cameraStatus, setCameraStatus] = useState<'idle' | 'loading' | 'playing' | 'error'>('idle'); // NEW: More detailed camera status
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  // Removed useEffect for onAuthStateChanged
-
   // --- Function to send a frame for live analysis ---
   const sendFrameForLiveAnalysis = useCallback(async () => {
-    if (isPaused) {
-      console.log("Live analysis paused. Not sending frame.");
+    if (isPaused || cameraStatus !== 'playing') { // Only send if not paused AND camera is playing
+      console.log("Live analysis skipped: paused or camera not playing.");
       return;
     }
 
@@ -69,7 +65,7 @@ export default function HomePage() {
           }
 
           const result = await response.json();
-          setLiveResult(result); // Update the live result state
+          setLiveResult(result);
           console.log("Live analysis result:", result);
 
           setIsPaused(true); // Auto-pause after a successful analysis result is received
@@ -77,37 +73,43 @@ export default function HomePage() {
         } catch (err: any) {
           console.error('Live analysis fetch error:', err);
         }
-      }, 'image/jpeg', 0.8); // JPEG format with 80% quality
+      }, 'image/jpeg', 0.8);
     }
-  }, [isPaused]);
+  }, [isPaused, cameraStatus]); // Added cameraStatus to dependencies
 
   // --- useEffect for Camera Stream Setup ---
   useEffect(() => {
-    let stream: MediaStream | null = null; // Local stream variable for cleanup
+    let stream: MediaStream | null = null;
 
     const initCamera = async () => {
       if (!showCamera) {
         console.log("initCamera: showCamera is false. Not initializing camera.");
+        setCameraStatus('idle'); // Reset status
         return;
       }
 
       setCapturedImagePreviewUrl(null);
       setAnalysisResult(null);
-      setLiveResult(null); // Clear live results on new camera open
+      setLiveResult(null);
       setError(null);
-      setIsPaused(false); // Ensure not paused when camera first opens
+      setIsPaused(false);
+      setCameraStatus('loading'); // Set status to loading
 
       if (!videoRef.current) {
-        console.warn("initCamera called, but videoRef.current is null. This should be caught by the dependent useEffect.");
+        console.warn("initCamera called, but videoRef.current is null.");
+        setCameraStatus('error');
+        setError("Internal error: Video element not found.");
         return;
       }
 
       try {
+        // Start with simpler constraints for broader compatibility
         const constraints: MediaStreamConstraints = {
           video: {
             facingMode: 'user',
-            width: { ideal: 1920 },
-            height: { ideal: 1080 }
+            // Try simpler constraints first, if this works, we can try higher 'ideal' values
+            width: { ideal: 1280 }, // Lowering ideal resolution slightly for broader compatibility
+            height: { ideal: 720 }
           }
         };
 
@@ -116,19 +118,38 @@ export default function HomePage() {
         console.log("Camera stream obtained:", stream);
 
         videoRef.current.srcObject = stream;
-        videoRef.current.onloadedmetadata = async () => {
-          console.log("Video metadata loaded.");
+        
+        // Use onCanPlay to ensure video is ready before attempting to play
+        videoRef.current.oncanplay = async () => {
+          console.log("Video is ready to play (oncanplay event).");
           try {
             await videoRef.current?.play();
-            console.log("Video playback started.");
-            setIsStreamingAnalysis(true);
+            console.log("Video playback initiated successfully.");
+            setCameraStatus('playing'); // Video is now playing
+            setIsStreamingAnalysis(true); // Start analysis when video is confirmed playing
           } catch (playErr: any) {
-            console.error("Error playing video stream:", playErr);
-            setError("Failed to play camera stream. Is camera in use by another app?");
+            console.error("Error playing video stream after oncanplay:", playErr);
+            setCameraStatus('error');
+            setError(`Failed to play camera stream: ${playErr.message || playErr.name}. Is camera in use or permissions denied?`);
             setShowCamera(false);
           }
         };
-        videoRef.current.load();
+
+        // Listen for errors during playback
+        videoRef.current.onerror = (event) => {
+          console.error("Video element error event:", event);
+          setCameraStatus('error');
+          setError("Video playback failed. Please check camera permissions or try another browser.");
+          setShowCamera(false);
+        };
+
+        // If oncanplay doesn't fire, metadata might still be useful, but oncanplay is preferred
+        videoRef.current.onloadedmetadata = () => {
+          console.log("Video metadata loaded (onloadedmetadata event).");
+          // No direct play() here, oncanplay will handle it
+        };
+
+        videoRef.current.load(); // Ensure video element attempts to load the stream
 
       } catch (err: any) {
         console.error('Error accessing camera in initCamera:', err);
@@ -143,6 +164,7 @@ export default function HomePage() {
           message = `Camera error: ${err.message || err.name}.`;
         }
         setError(message);
+        setCameraStatus('error');
         setShowCamera(false);
       }
     };
@@ -159,20 +181,22 @@ export default function HomePage() {
       }
       setIsStreamingAnalysis(false);
       setIsPaused(false);
+      setCameraStatus('idle'); // Reset status on cleanup
     };
-  }, [showCamera]);
+  }, [showCamera]); // Only depends on showCamera
 
   // --- useEffect for Live Analysis Interval Management ---
   useEffect(() => {
     let intervalId: NodeJS.Timeout | undefined;
 
-    if (isStreamingAnalysis && !isPaused) {
+    // Only start interval if camera is playing and not paused
+    if (isStreamingAnalysis && cameraStatus === 'playing' && !isPaused) {
       console.log("Starting live analysis interval.");
       intervalId = setInterval(() => {
         sendFrameForLiveAnalysis();
       }, 3000);
     } else {
-      console.log("Stopping live analysis interval (paused or not streaming).");
+      console.log("Stopping live analysis interval (paused, not playing, or not streaming).");
       if (intervalId) {
         clearInterval(intervalId);
       }
@@ -185,7 +209,7 @@ export default function HomePage() {
         clearInterval(intervalId);
       }
     };
-  }, [isStreamingAnalysis, isPaused, sendFrameForLiveAnalysis]); // Depends on these states/functions
+  }, [isStreamingAnalysis, isPaused, cameraStatus, sendFrameForLiveAnalysis]);
 
   // --- Other functions ---
   const togglePauseResume = () => {
@@ -196,14 +220,10 @@ export default function HomePage() {
     setShowCamera(false);
   };
 
-  // Removed handleLogout as it's now in AuthContext
-
-  // handleAnalyzeSnapshot and captureSnapshot are commented out as before.
-
   return (
     <div className="flex flex-col items-center justify-center min-h-[calc(100vh-128px)] bg-gradient-to-br from-pink-50 via-purple-50 to-blue-50 p-6 text-center">
       <div className="max-w-3xl mx-auto py-12 px-6 bg-white rounded-3xl shadow-xl border border-gray-100 transform transition duration-500 hover:scale-105 relative">
-        {/* Removed Login/Logout Button from here as it's now in RootLayout */}
+        {/* Login/Logout Button is now in RootLayout */}
 
         <h1 className="text-5xl font-extrabold text-purple-800 mb-6 leading-tight">
           Your Daily Beauty Mirror, Powered by AI ✨
@@ -245,16 +265,38 @@ export default function HomePage() {
 
       {/* Camera Modal */}
       {showCamera && (
-        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-6 shadow-xl w-full max-w-5xl h-[95vh] max-h-[800px] flex flex-col md:flex-row gap-6 relative">
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-0 md:p-4">
+          {/* Main modal content box: Now full screen on mobile, modal on desktop */}
+          <div className="bg-white rounded-none md:rounded-2xl p-4 md:p-6 shadow-xl w-full h-screen max-h-screen flex flex-col md:flex-row gap-4 md:gap-6 relative">
             
             {/* Left Column: Camera Feed & Controls */}
             <div className="flex flex-col flex-1">
               <h2 className="text-2xl font-bold mb-4 text-center text-purple-700">Live Camera Mirror 🤳</h2>
-              <div className="relative w-full aspect-video bg-gray-800 rounded-xl overflow-hidden flex-grow">
+              <div className="relative w-full aspect-video bg-gray-800 rounded-xl overflow-hidden flex-grow flex items-center justify-center">
+                {/* Conditionally render loading spinner or error message */}
+                {cameraStatus === 'loading' && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-gray-900 text-white text-xl flex-col">
+                    <svg className="animate-spin h-8 w-8 text-white mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Loading Camera...
+                    {error && <p className="text-sm text-red-300 mt-2">{error}</p>}
+                  </div>
+                )}
+                {cameraStatus === 'error' && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-red-900 text-white text-xl flex-col p-4">
+                    <span className="text-4xl mb-3">⚠️</span>
+                    Camera Error!
+                    {error && <p className="text-sm text-red-200 mt-2 text-center">{error}</p>}
+                    <button onClick={closeCamera} className="mt-4 bg-red-500 text-white py-2 px-4 rounded-full text-base font-semibold hover:bg-red-600 transition shadow-md">
+                      Close
+                    </button>
+                  </div>
+                )}
                 <video 
                   ref={videoRef} 
-                  className="w-full h-full object-cover" 
+                  className={`w-full h-full object-cover ${cameraStatus !== 'playing' ? 'hidden' : ''}`} // Hide video until playing
                   autoPlay 
                   playsInline 
                   muted 
@@ -263,30 +305,32 @@ export default function HomePage() {
                 <canvas ref={canvasRef} className="hidden"></canvas>
 
                 {/* Buttons: Positioned absolutely within the video container */}
-                <div className="absolute bottom-4 left-0 right-0 flex justify-between px-4">
-                  {isStreamingAnalysis && !isPaused ? (
+                {cameraStatus === 'playing' && ( // Only show buttons when video is playing
+                  <div className="absolute bottom-4 left-0 right-0 flex justify-between px-4">
+                    {isStreamingAnalysis && !isPaused ? (
+                      <button
+                        onClick={togglePauseResume}
+                        className="bg-yellow-500 text-white py-2 px-3 rounded-full text-sm font-semibold hover:bg-yellow-600 transition shadow-md"
+                      >
+                        Pause ⏸️
+                      </button>
+                    ) : isStreamingAnalysis && isPaused ? (
+                      <button
+                        onClick={togglePauseResume}
+                        className="bg-green-500 text-white py-2 px-3 rounded-full text-sm font-semibold hover:bg-green-600 transition shadow-md"
+                      >
+                        Resume ▶️
+                      </button>
+                    ) : null}
+                    
                     <button
-                      onClick={togglePauseResume}
-                      className="bg-yellow-500 text-white py-2 px-3 rounded-full text-sm font-semibold hover:bg-yellow-600 transition shadow-md"
+                      onClick={closeCamera}
+                      className="bg-red-500 text-white py-2 px-3 rounded-full text-sm font-semibold hover:bg-red-600 transition shadow-md"
                     >
-                      Pause ⏸️
+                      Close ✖️
                     </button>
-                  ) : isStreamingAnalysis && isPaused ? (
-                    <button
-                      onClick={togglePauseResume}
-                      className="bg-green-500 text-white py-2 px-3 rounded-full text-sm font-semibold hover:bg-green-600 transition shadow-md"
-                    >
-                      Resume ▶️
-                    </button>
-                  ) : null}
-                  
-                  <button
-                    onClick={closeCamera}
-                    className="bg-red-500 text-white py-2 px-3 rounded-full text-sm font-semibold hover:bg-red-600 transition shadow-md"
-                  >
-                    Close ✖️
-                  </button>
-                </div>
+                  </div>
+                )}
               </div>
             </div> {/* End Left Column */}
 
