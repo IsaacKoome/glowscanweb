@@ -5,11 +5,10 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import AnalysisResult from '../components/AnalysisResult'; // Make sure path is correct
-// Removed auth imports as state is global now
+// No need to import auth here, it's handled by AuthContext in layout.tsx
 
 export default function HomePage() {
-  // Removed user state and its related useEffect
-  // const [user, setUser] = useState<User | null>(null); 
+  // Removed user state and its related useEffect as it's now global via AuthContext
   const [showCamera, setShowCamera] = useState(false);
   const [capturedImagePreviewUrl, setCapturedImagePreviewUrl] = useState<string | null>(null);
   const [analysisResult, setAnalysisResult] = useState<any | null>(null); // For snapshot analysis result
@@ -20,8 +19,6 @@ export default function HomePage() {
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-
-  // Removed useEffect for onAuthStateChanged
 
   // --- Function to send a frame for live analysis ---
   const sendFrameForLiveAnalysis = useCallback(async () => {
@@ -185,7 +182,7 @@ export default function HomePage() {
         clearInterval(intervalId);
       }
     };
-  }, [isStreamingAnalysis, isPaused, sendFrameForLiveAnalysis]); // Depends on these states/functions
+  }, [isStreamingAnalysis, isPaused, sendFrameForLiveAnalysis]);
 
   // --- Other functions ---
   const togglePauseResume = () => {
@@ -196,14 +193,10 @@ export default function HomePage() {
     setShowCamera(false);
   };
 
-  // Removed handleLogout as it's now in AuthContext
-
-  // handleAnalyzeSnapshot and captureSnapshot are commented out as before.
-
   return (
     <div className="flex flex-col items-center justify-center min-h-[calc(100vh-128px)] bg-gradient-to-br from-pink-50 via-purple-50 to-blue-50 p-6 text-center">
       <div className="max-w-3xl mx-auto py-12 px-6 bg-white rounded-3xl shadow-xl border border-gray-100 transform transition duration-500 hover:scale-105 relative">
-        {/* Removed Login/Logout Button from here as it's now in RootLayout */}
+        {/* Login/Logout Button is now in RootLayout */}
 
         <h1 className="text-5xl font-extrabold text-purple-800 mb-6 leading-tight">
           Your Daily Beauty Mirror, Powered by AI ✨
@@ -245,8 +238,9 @@ export default function HomePage() {
 
       {/* Camera Modal */}
       {showCamera && (
-        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-6 shadow-xl w-full max-w-5xl h-[95vh] max-h-[800px] flex flex-col md:flex-row gap-6 relative">
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-0 md:p-4"> {/* Changed p-4 to p-0 for mobile full screen */}
+          {/* Main modal content box: Now full screen on mobile, modal on desktop */}
+          <div className="bg-white rounded-none md:rounded-2xl p-4 md:p-6 shadow-xl w-full h-screen max-h-screen flex flex-col md:flex-row gap-4 md:gap-6 relative"> {/* Adjusted padding, rounded corners, height for full screen on mobile */}
             
             {/* Left Column: Camera Feed & Controls */}
             <div className="flex flex-col flex-1">
