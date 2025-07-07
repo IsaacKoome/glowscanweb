@@ -21,9 +21,9 @@ export default function HomePage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  // NEW: Debugging log for auth state on homepage
+  // Debugging log for auth state on homepage
   useEffect(() => {
-    console.log("HomePage: authLoading state:", authLoading, "User:", user ? user.email : "null");
+    console.log("HomePage: authLoading state:", authLoading, "User:", user ? user.email : "null", "UID:", user ? user.uid : "null");
   }, [authLoading, user]);
 
   // --- Function to send a frame for live analysis ---
@@ -31,6 +31,14 @@ export default function HomePage() {
     if (isPaused || cameraStatus !== 'playing') {
       console.log("Live analysis skipped: paused or camera not playing.");
       return;
+    }
+
+    // NEW: Check if user is logged in before sending analysis
+    if (!user) {
+        console.error("Cannot send live analysis: User not logged in.");
+        setError("Please log in to use live analysis features.");
+        setIsPaused(true); // Pause analysis if not logged in
+        return;
     }
 
     const video = videoRef.current;
@@ -63,11 +71,21 @@ export default function HomePage() {
           const response = await fetch(API_ENDPOINT, {
             method: 'POST',
             body: formData,
+            // NEW: Add X-User-ID header here
+            headers: {
+              'X-User-ID': user.uid // Send the user's UID in the header
+            }
           });
 
           if (!response.ok) {
             const errorData = await response.json().catch(() => response.text());
             console.error(`Live analysis HTTP Error! Status: ${response.status}. Details: ${JSON.stringify(errorData)}`);
+            // Display specific error message to user if it's a quota error
+            if (response.status === 429) {
+                setError("Daily analysis quota exceeded. Please try again tomorrow or upgrade your plan.");
+            } else {
+                setError(`Analysis failed: ${errorData.detail || "Server error."}`);
+            }
             return;
           }
 
@@ -79,10 +97,11 @@ export default function HomePage() {
 
         } catch (err: any) {
           console.error('Live analysis fetch error:', err);
+          setError(`Network error during analysis: ${err.message}`);
         }
       }, 'image/jpeg', 0.8);
     }
-  }, [isPaused, cameraStatus]);
+  }, [isPaused, cameraStatus, user]); // Added 'user' to useCallback dependencies
 
   // --- useEffect for Camera Stream Setup ---
   useEffect(() => {
@@ -189,13 +208,14 @@ export default function HomePage() {
   useEffect(() => {
     let intervalId: NodeJS.Timeout | undefined;
 
-    if (isStreamingAnalysis && cameraStatus === 'playing' && !isPaused) {
+    // Only start interval if camera is playing, not paused, AND user is logged in
+    if (isStreamingAnalysis && cameraStatus === 'playing' && !isPaused && user) { // NEW: Added user condition
       console.log("Starting live analysis interval.");
       intervalId = setInterval(() => {
         sendFrameForLiveAnalysis();
       }, 3000);
     } else {
-      console.log("Stopping live analysis interval (paused, not playing, or not streaming).");
+      console.log("Stopping live analysis interval (paused, not playing, not streaming, or user not logged in).");
       if (intervalId) {
         clearInterval(intervalId);
       }
@@ -207,7 +227,7 @@ export default function HomePage() {
         clearInterval(intervalId);
       }
     };
-  }, [isStreamingAnalysis, isPaused, cameraStatus, sendFrameForLiveAnalysis]);
+  }, [isStreamingAnalysis, isPaused, cameraStatus, user, sendFrameForLiveAnalysis]); // Added 'user' to dependencies
 
   // --- Other functions ---
   const togglePauseResume = () => {
@@ -260,16 +280,7 @@ export default function HomePage() {
           Upload Image from Files 📂
         </Link>
 
-        {/* NEW: Link to User Profile if logged in */}
-        {!authLoading && user && (
-          <div className="mt-8">
-            <Link href={`/profile/${user.uid}`} passHref>
-              <button className="inline-flex items-center justify-center bg-gradient-to-r from-blue-500 to-green-500 text-white font-bold py-4 px-10 rounded-full text-2xl shadow-lg transition duration-300 ease-in-out transform hover:scale-105 hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-blue-300">
-                View My Profile 👤
-              </button>
-            </Link>
-          </div>
-        )}
+        {/* The "View My Profile" button is now in the HeaderNavClient, so it's removed from here. */}
       </div>
 
       {/* Camera Modal */}
