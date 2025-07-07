@@ -6,3 +6,4 @@ opencv-python
 google-generativeai
 openai
 firebase-admin
+httpx

@@ -18,13 +18,31 @@ export default function HomePage() {
   const [error, setError] = useState<string | null>(null);
   const [cameraStatus, setCameraStatus] = useState<'idle' | 'loading' | 'playing' | 'error'>('idle');
 
+  // For unauthenticated users to have a temporary ID for quota tracking
+  const [tempUserId, setTempUserId] = useState<string | null>(null);
+
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
+  useEffect(() => {
+    if (!authLoading && !user && !tempUserId) {
+      const storedTempId = localStorage.getItem('tempUserId');
+      if (storedTempId) {
+        setTempUserId(storedTempId);
+        console.log("HomePage: Loaded existing tempUserId from localStorage:", storedTempId);
+      } else {
+        const newTempId = crypto.randomUUID();
+        localStorage.setItem('tempUserId', newTempId);
+        setTempUserId(newTempId);
+        console.log("HomePage: Generated new tempUserId:", newTempId);
+      }
+    }
+  }, [authLoading, user, tempUserId]);
+
   // Debugging log for auth state on homepage
   useEffect(() => {
-    console.log("HomePage: authLoading state:", authLoading, "User:", user ? user.email : "null", "UID:", user ? user.uid : "null");
-  }, [authLoading, user]);
+    console.log("HomePage: authLoading state:", authLoading, "User:", user ? user.email : "null", "UID:", user ? user.uid : "null", "Temp UID:", tempUserId);
+  }, [authLoading, user, tempUserId]);
 
   // --- Function to send a frame for live analysis ---
   const sendFrameForLiveAnalysis = useCallback(async () => {
@@ -33,12 +51,14 @@ export default function HomePage() {
       return;
     }
 
-    // NEW: Check if user is logged in before sending analysis
-    if (!user) {
-        console.error("Cannot send live analysis: User not logged in.");
-        setError("Please log in to use live analysis features.");
-        setIsPaused(true); // Pause analysis if not logged in
-        return;
+    // NEW: Use either logged-in user's UID or temporary ID
+    const userIdToSend = user ? user.uid : tempUserId;
+
+    if (!userIdToSend) {
+      console.error("Cannot send live analysis: No user ID (logged in or temporary) available.");
+      setError("An internal error occurred: No user identifier. Please refresh or try again.");
+      setIsPaused(true);
+      return;
     }
 
     const video = videoRef.current;
@@ -56,6 +76,7 @@ export default function HomePage() {
     if (context) {
       context.drawImage(video, 0, 0, canvas.width, canvas.height);
 
+      // Convert canvas content to Blob with higher JPEG quality (0.9 instead of 0.8)
       canvas.toBlob(async (blob) => {
         if (!blob) {
           console.error("Failed to create blob from canvas.");
@@ -73,7 +94,7 @@ export default function HomePage() {
             body: formData,
             // NEW: Add X-User-ID header here
             headers: {
-              'X-User-ID': user.uid // Send the user's UID in the header
+              'X-User-ID': userIdToSend // Send the user's UID or temporary ID in the header
             }
           });
 
@@ -99,9 +120,9 @@ export default function HomePage() {
           console.error('Live analysis fetch error:', err);
           setError(`Network error during analysis: ${err.message}`);
         }
-      }, 'image/jpeg', 0.8);
+      }, 'image/jpeg', 0.9); // Increased quality to 0.9
     }
-  }, [isPaused, cameraStatus, user]); // Added 'user' to useCallback dependencies
+  }, [isPaused, cameraStatus, user, tempUserId]); // Added 'user' and 'tempUserId' to useCallback dependencies
 
   // --- useEffect for Camera Stream Setup ---
   useEffect(() => {
@@ -132,8 +153,8 @@ export default function HomePage() {
         const constraints: MediaStreamConstraints = {
           video: {
             facingMode: 'user',
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
+            width: { ideal: 1920 }, // Try Full HD width
+            height: { ideal: 1080 } // Try Full HD height
           }
         };
 
@@ -208,14 +229,14 @@ export default function HomePage() {
   useEffect(() => {
     let intervalId: NodeJS.Timeout | undefined;
 
-    // Only start interval if camera is playing, not paused, AND user is logged in
-    if (isStreamingAnalysis && cameraStatus === 'playing' && !isPaused && user) { // NEW: Added user condition
+    // Only start interval if camera is playing, not paused, AND user is logged in OR has a temp ID
+    if (isStreamingAnalysis && cameraStatus === 'playing' && !isPaused && (user || tempUserId)) { // NEW: Added tempUserId condition
       console.log("Starting live analysis interval.");
       intervalId = setInterval(() => {
         sendFrameForLiveAnalysis();
       }, 3000);
     } else {
-      console.log("Stopping live analysis interval (paused, not playing, not streaming, or user not logged in).");
+      console.log("Stopping live analysis interval (paused, not playing, not streaming, or no user ID available).");
       if (intervalId) {
         clearInterval(intervalId);
       }
@@ -227,7 +248,7 @@ export default function HomePage() {
         clearInterval(intervalId);
       }
     };
-  }, [isStreamingAnalysis, isPaused, cameraStatus, user, sendFrameForLiveAnalysis]); // Added 'user' to dependencies
+  }, [isStreamingAnalysis, isPaused, cameraStatus, user, tempUserId, sendFrameForLiveAnalysis]); // Added 'tempUserId' to dependencies
 
   // --- Other functions ---
   const togglePauseResume = () => {
@@ -276,9 +297,17 @@ export default function HomePage() {
           </button>
         </div>
 
-        <Link href="/upload" className="inline-flex items-center justify-center bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold py-4 px-10 rounded-full text-2xl shadow-lg transition duration-300 ease-in-out transform hover:scale-105 hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-purple-300">
-          Upload Image from Files 📂
-        </Link>
+        {/* Flex container for the two bottom buttons */}
+        <div className="flex flex-col sm:flex-row justify-center gap-4 mt-8">
+          <Link href="/upload" className="inline-flex items-center justify-center bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold py-4 px-10 rounded-full text-2xl shadow-lg transition duration-300 ease-in-out transform hover:scale-105 hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-purple-300">
+            Upload Image from Files 📂
+          </Link>
+
+          {/* NEW: Button to Pricing Page */}
+          <Link href="/pricing" className="inline-flex items-center justify-center bg-gradient-to-r from-green-500 to-teal-500 text-white font-bold py-4 px-10 rounded-full text-2xl shadow-lg transition duration-300 ease-in-out transform hover:scale-105 hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-green-300">
+            View Plans & Pricing 💰
+          </Link>
+        </div>
 
         {/* The "View My Profile" button is now in the HeaderNavClient, so it's removed from here. */}
       </div>
