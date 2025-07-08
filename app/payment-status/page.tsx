@@ -1,20 +1,21 @@
 // app/payment-status/page.tsx
-"use client"; // This is necessary for client-side functionality like useState, useEffect, fetch, etc.
+"use client";
 
-import React, { useEffect, useState, Suspense } from 'react'; // Import Suspense
+import React, { useEffect, useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import { useAuth } from '../../context/AuthContext'; // Import useAuth hook
 
-// Create a separate component to hold the logic that uses useSearchParams
-// This component will be wrapped by Suspense in the default export
 function PaymentStatusContent() {
   const searchParams = useSearchParams();
+  const { user, loading: authLoading, refreshUser } = useAuth(); // Get refreshUser from context
   const [status, setStatus] = useState<'success' | 'cancelled' | 'error' | 'verifying'>('verifying');
   const [message, setMessage] = useState('Verifying your payment status...');
   const [txRef, setTxRef] = useState<string | null>(null);
   const [planId, setPlanId] = useState<string | null>(null);
-  const [userId, setUserId] = useState<string | null>(null);
+  const [userIdFromUrl, setUserIdFromUrl] = useState<string | null>(null); // Renamed to avoid conflict with user.uid
 
+  // Effect to parse URL params and set initial state
   useEffect(() => {
     const paymentStatus = searchParams.get('status');
     const transactionRef = searchParams.get('tx_ref');
@@ -23,11 +24,12 @@ function PaymentStatusContent() {
 
     setTxRef(transactionRef);
     setPlanId(receivedPlanId);
-    setUserId(receivedUserId);
+    setUserIdFromUrl(receivedUserId);
 
     if (paymentStatus === 'success') {
-      setStatus('success');
-      setMessage('Payment successful! Your plan has been updated.');
+      // If Paystack immediately says success, we still verify via webhook
+      setStatus('verifying');
+      setMessage('Payment successful! Confirming your plan update...');
     } else if (paymentStatus === 'cancelled') {
       setStatus('cancelled');
       setMessage('Payment cancelled. You can try again or choose another plan.');
@@ -38,7 +40,45 @@ function PaymentStatusContent() {
       setStatus('error');
       setMessage('An error occurred during payment processing. Please try again.');
     }
-  }, [searchParams]);
+
+    // Trigger a user data refresh shortly after the page loads if it's a callback/success state
+    // This helps ensure the AuthContext user object is up-to-date with Firestore
+    if (paymentStatus === 'success' || paymentStatus === 'callback') {
+      // Use a timeout to ensure AuthContext has had a chance to initialize
+      const initialRefreshTimeout = setTimeout(() => {
+        if (!authLoading && user) { // Only refresh if auth is ready and a user exists
+          console.log("PaymentStatusContent: Initial refreshUser triggered.");
+          refreshUser();
+        } else if (!authLoading && !user && receivedUserId) { // If no user but we have a temp ID, also refresh
+          console.log("PaymentStatusContent: Initial refreshUser triggered for unauthenticated user.");
+          refreshUser(); // This will trigger anonymous sign-in and then fetch data
+        }
+      }, 2000); // Give it 2 seconds
+
+      return () => clearTimeout(initialRefreshTimeout);
+    }
+
+  }, [searchParams, authLoading, user, refreshUser]); // Dependencies for this useEffect
+
+  // Effect to watch for user.subscriptionPlan changes from AuthContext
+  useEffect(() => {
+    // Only proceed if we are in 'verifying' state and AuthContext is loaded
+    if (status === 'verifying' && !authLoading && user && planId) {
+      console.log(`PaymentStatusContent: Watching user.subscriptionPlan. Current: ${user.subscriptionPlan}, Expected: ${planId}`);
+      if (user.subscriptionPlan === planId) {
+        console.log("PaymentStatusContent: User plan matches expected planId. Setting status to success.");
+        setStatus('success');
+        setMessage('Payment confirmed and plan updated!');
+      } else {
+        // If user exists but plan doesn't match yet, and we're still verifying,
+        // it means the webhook might have hit, but the AuthContext hasn't fully propagated.
+        // Or, if the user was anonymous, the UID might have changed after anonymous login.
+        // We can trigger another refresh as a fallback.
+        console.log("PaymentStatusContent: User plan does not match expected. Triggering refreshUser.");
+        refreshUser();
+      }
+    }
+  }, [user, authLoading, planId, status, refreshUser]); // Dependencies for this useEffect
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[calc(100vh-128px)] bg-gradient-to-br from-blue-50 to-green-50 p-6 text-center">
@@ -51,7 +91,12 @@ function PaymentStatusContent() {
             <p className="text-xl text-gray-700 mb-8">{message}</p>
             {planId && <p className="text-lg text-gray-600 mb-2">Your new plan: <span className="font-bold text-green-600">{planId.charAt(0).toUpperCase() + planId.slice(1)}</span></p>}
             {txRef && <p className="text-sm text-gray-500">Transaction Reference: <span className="font-mono">{txRef}</span></p>}
-            {userId && <p className="text-sm text-gray-500">User ID: <span className="font-mono">{userId}</span></p>}
+            {userIdFromUrl && <p className="text-sm text-gray-500">User ID: <span className="font-mono">{userIdFromUrl}</span></p>}
+            {user && user.subscriptionPlan && user.subscriptionPlan !== planId && (
+              <p className="text-sm text-orange-500 mt-2">
+                Your current plan in app: <span className="font-bold">{user.subscriptionPlan.charAt(0).toUpperCase() + user.subscriptionPlan.slice(1)}</span> (may take a moment to fully update)
+              </p>
+            )}
             <Link href="/" className="inline-flex items-center justify-center bg-gradient-to-r from-green-500 to-blue-500 text-white font-bold py-3 px-8 rounded-full text-lg shadow-lg transition duration-300 ease-in-out transform hover:scale-105 hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-green-300 mt-8">
               Go to Home
             </Link>
