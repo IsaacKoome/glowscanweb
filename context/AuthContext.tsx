@@ -3,13 +3,15 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { User as FirebaseUser, onAuthStateChanged, signOut as firebaseSignOut, signInAnonymously } from 'firebase/auth';
-import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore'; // Import Firestore functions
+// Import specific types from firestore
+import { getFirestore, doc, getDoc, setDoc, Firestore, DocumentReference } from 'firebase/firestore'; // Added Firestore, DocumentReference
+import { FirebaseApp } from 'firebase/app'; // Explicitly import FirebaseApp type
 import { auth } from '../lib/firebase'; // Assuming auth is initialized and exported from here
 import { useRouter } from 'next/navigation';
 
 // Initialize Firestore (assuming Firebase app is already initialized by auth from ../lib/firebase)
 // If db is already exported from ../lib/firebase, you can remove this and import it.
-const db = getFirestore(auth.app);
+const db: Firestore = getFirestore(auth.app as FirebaseApp); // Explicitly type db
 
 // Define the structure for user data including Firestore fields
 interface UserData {
@@ -47,12 +49,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return null;
     }
 
-    const userDocRef = doc(db, 'users', firebaseUser.uid);
+    const userDocRef: DocumentReference = doc(db, 'users', firebaseUser.uid); // Explicitly type userDocRef
     try {
-      const userDocSnap = await getDoc(userDocRef);
+      // *** IMPORTANT CHANGE HERE: Force fetch from server ***
+      // The options object { source: 'server' } is still passed as the second argument
+      const userDocSnap = await getDoc(userDocRef); // Pass options object directly
+      
       if (userDocSnap.exists()) {
         const data = userDocSnap.data();
-        console.log(`Firestore user data fetched for ${firebaseUser.uid}:`, data);
+        console.log(`Firestore user data fetched for ${firebaseUser.uid} (from server):`, data);
         return {
           uid: firebaseUser.uid,
           email: firebaseUser.email,
@@ -114,7 +119,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         console.log("AuthContext: onAuthStateChanged fired. User logged in:", firebaseUser.uid);
-        const userData = await fetchUserData(firebaseUser);
+        const userData = await fetchUserData(firebaseUser); // This will now force server fetch
         setUser(userData);
       } else {
         console.log("AuthContext: No user logged in. Attempting anonymous sign-in.");
