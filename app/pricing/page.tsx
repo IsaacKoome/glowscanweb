@@ -14,7 +14,7 @@ interface Plan {
   features: string[];
   buttonText: string;
   isPopular?: boolean;
-  paystackPlanCode?: string; // Add Paystack Plan Code
+  paystackPlanCode?: string | null; // Allow null for free plan
 }
 
 // Define your subscription plans
@@ -31,7 +31,7 @@ const plans: Plan[] = [
       'No credit card required'
     ],
     buttonText: 'Current Plan',
-    paystackPlanCode: "null", // No Paystack plan for free
+    paystackPlanCode: null, // FIXED: Changed "null" string to actual null
   },
   {
     id: 'basic',
@@ -106,7 +106,8 @@ export default function PricingPage() {
     setPaymentError(null);
 
     const selectedPlan = plans.find(p => p.id === planId);
-    if (!selectedPlan || !selectedPlan.paystackPlanCode) {
+    // Check if selectedPlan exists AND if it has a valid paystackPlanCode (not null or undefined)
+    if (!selectedPlan || !selectedPlan.paystackPlanCode) { // This condition will now correctly catch the free plan
       setPaymentError("Invalid plan selected or missing Paystack plan code.");
       setLoadingPayment(null);
       return;
