@@ -8,12 +8,12 @@ import { getFirestore } from 'firebase/firestore';
 // Make sure these are set in your .env.local file (and Vercel/Cloud Run environment variables)
 
 const firebaseConfig = {
-  apiKey: "AIzaSyAxuE5lYXmd8PUewdlYc9yeWssBEzA17ck",
-  authDomain: "wonderjoyai.firebaseapp.com",
-  projectId: "wonderjoyai",
-  storageBucket: "wonderjoyai.firebasestorage.app",
-  messagingSenderId: "182014677364",
-  appId: "1:182014677364:web:6e17dfa541e2b6e88e5c21"
+  apiKey: "AIzaSyDoMEgC0Z2NW2De2fbJ5M4idUrhgELQYeE",
+  authDomain: "deep-mile-460606-p0.firebaseapp.com",
+  projectId: "deep-mile-460606-p0",
+  storageBucket: "deep-mile-460606-p0.firebasestorage.app",
+  messagingSenderId: "241128138627",
+  appId: "1:241128138627:web:5c95c7e8fd7dac9fe1b8b6"
 };
 
 // Initialize Firebase only if it hasn't been initialized already
