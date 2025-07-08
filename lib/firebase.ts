@@ -7,7 +7,7 @@ import { getFirestore } from 'firebase/firestore';
 // For Next.js, it's common to use environment variables for these.
 // Make sure these are set in your .env.local file (and Vercel/Cloud Run environment variables)
 
-const firebaseConfig = {
+export const firebaseConfig = {
   apiKey: "AIzaSyDoMEgC0Z2NW2De2fbJ5M4idUrhgELQYeE",
   authDomain: "deep-mile-460606-p0.firebaseapp.com",
   projectId: "deep-mile-460606-p0",
