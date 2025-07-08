@@ -1,27 +1,29 @@
 // app/payment-status/page.tsx
-"use client";
+"use client"; // This is necessary for client-side functionality like useState, useEffect, fetch, etc.
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, Suspense } from 'react'; // Import Suspense
 import { useSearchParams } from 'next/navigation';
-import Link from 'next/link'; // Keep Link as it's used for navigation buttons
+import Link from 'next/link';
 
-export default function PaymentStatusPage() {
+// Create a separate component to hold the logic that uses useSearchParams
+// This component will be wrapped by Suspense in the default export
+function PaymentStatusContent() {
   const searchParams = useSearchParams();
   const [status, setStatus] = useState<'success' | 'cancelled' | 'error' | 'verifying'>('verifying');
   const [message, setMessage] = useState('Verifying your payment status...');
   const [txRef, setTxRef] = useState<string | null>(null);
   const [planId, setPlanId] = useState<string | null>(null);
-  const [userId, setUserId] = useState<string | null>(null); // This was the unused variable
+  const [userId, setUserId] = useState<string | null>(null);
 
   useEffect(() => {
     const paymentStatus = searchParams.get('status');
     const transactionRef = searchParams.get('tx_ref');
     const receivedPlanId = searchParams.get('planId');
-    const receivedUserId = searchParams.get('userId'); // Value was assigned here
+    const receivedUserId = searchParams.get('userId');
 
     setTxRef(transactionRef);
     setPlanId(receivedPlanId);
-    setUserId(receivedUserId); // Set the state
+    setUserId(receivedUserId);
 
     if (paymentStatus === 'success') {
       setStatus('success');
@@ -49,7 +51,7 @@ export default function PaymentStatusPage() {
             <p className="text-xl text-gray-700 mb-8">{message}</p>
             {planId && <p className="text-lg text-gray-600 mb-2">Your new plan: <span className="font-bold text-green-600">{planId.charAt(0).toUpperCase() + planId.slice(1)}</span></p>}
             {txRef && <p className="text-sm text-gray-500">Transaction Reference: <span className="font-mono">{txRef}</span></p>}
-            {userId && <p className="text-sm text-gray-500">User ID: <span className="font-mono">{userId}</span></p>} {/* NEW: Display userId */}
+            {userId && <p className="text-sm text-gray-500">User ID: <span className="font-mono">{userId}</span></p>}
             <Link href="/" className="inline-flex items-center justify-center bg-gradient-to-r from-green-500 to-blue-500 text-white font-bold py-3 px-8 rounded-full text-lg shadow-lg transition duration-300 ease-in-out transform hover:scale-105 hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-green-300 mt-8">
               Go to Home
             </Link>
@@ -99,5 +101,14 @@ export default function PaymentStatusPage() {
         )}
       </div>
     </div>
+  );
+}
+
+// Default export wrapped with Suspense
+export default function PaymentStatusPage() {
+  return (
+    <Suspense fallback={<div>Loading payment status...</div>}>
+      <PaymentStatusContent />
+    </Suspense>
   );
 }
