@@ -4,7 +4,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { User as FirebaseUser, onAuthStateChanged, signOut as firebaseSignOut, signInAnonymously } from 'firebase/auth';
 // Import specific types from firestore
-import { getFirestore, doc, getDoc, setDoc, Firestore, DocumentReference } from 'firebase/firestore'; // Added Firestore, DocumentReference
+import { getFirestore, doc, getDocFromServer, setDoc, Firestore, DocumentReference } from 'firebase/firestore'; // Added Firestore, DocumentReference
 import { FirebaseApp } from 'firebase/app'; // Explicitly import FirebaseApp type
 import { auth } from '../lib/firebase'; // Assuming auth is initialized and exported from here
 import { useRouter } from 'next/navigation';
@@ -53,7 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       // *** IMPORTANT CHANGE HERE: Force fetch from server ***
       // The options object { source: 'server' } is still passed as the second argument
-      const userDocSnap = await getDoc(userDocRef); // Pass options object directly
+      const userDocSnap = await getDocFromServer(userDocRef); // Pass options object directly
       
       if (userDocSnap.exists()) {
         const data = userDocSnap.data();
