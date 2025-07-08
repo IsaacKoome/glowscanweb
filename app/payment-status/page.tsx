@@ -53,7 +53,10 @@ function PaymentStatusContent() {
     if (displayStatus === 'verifying' && !authLoading && user && planIdFromUrl) {
       console.log(`PaymentStatusContent: Watching user.subscriptionPlan. Current: ${user.subscriptionPlan}, Expected: ${planIdFromUrl}`);
       
-      if (user.subscriptionPlan === planIdFromUrl) {
+      const normalize = (plan: string | null) => plan?.toLowerCase().trim() || 'free';
+
+if (normalize(user.subscriptionPlan) === normalize(planIdFromUrl)) {
+
         console.log("PaymentStatusContent: User plan matches expected planId. Setting status to success.");
         setDisplayStatus('success');
         setMessage('Payment confirmed and plan updated!');
