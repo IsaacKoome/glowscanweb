@@ -3,7 +3,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import Link from 'next/link';
+import Link from 'next/link'; // Keep Link as it's used for navigation buttons
 
 export default function PaymentStatusPage() {
   const searchParams = useSearchParams();
@@ -11,36 +11,27 @@ export default function PaymentStatusPage() {
   const [message, setMessage] = useState('Verifying your payment status...');
   const [txRef, setTxRef] = useState<string | null>(null);
   const [planId, setPlanId] = useState<string | null>(null);
-  const [userId, setUserId] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null); // This was the unused variable
 
   useEffect(() => {
     const paymentStatus = searchParams.get('status');
     const transactionRef = searchParams.get('tx_ref');
     const receivedPlanId = searchParams.get('planId');
-    const receivedUserId = searchParams.get('userId');
+    const receivedUserId = searchParams.get('userId'); // Value was assigned here
 
     setTxRef(transactionRef);
     setPlanId(receivedPlanId);
-    setUserId(receivedUserId);
+    setUserId(receivedUserId); // Set the state
 
     if (paymentStatus === 'success') {
       setStatus('success');
       setMessage('Payment successful! Your plan has been updated.');
-      // Optionally, you might want to call a backend endpoint here to verify the transaction
-      // using the tx_ref, especially for one-time payments.
-      // For subscriptions, the webhook should handle the update.
     } else if (paymentStatus === 'cancelled') {
       setStatus('cancelled');
       setMessage('Payment cancelled. You can try again or choose another plan.');
     } else if (paymentStatus === 'callback') {
-      // This status is from Paystack's callback URL.
-      // We should verify the transaction with Paystack directly from the backend.
-      // However, for simplicity, we're mostly relying on the webhook.
-      // This page can confirm the user was redirected and inform them.
       setStatus('verifying');
       setMessage('Payment initiated. Please wait while we confirm your subscription. This may take a few moments.');
-      // You could trigger a backend verification call here if needed,
-      // but the webhook is the primary source of truth for subscription status.
     } else {
       setStatus('error');
       setMessage('An error occurred during payment processing. Please try again.');
@@ -58,6 +49,7 @@ export default function PaymentStatusPage() {
             <p className="text-xl text-gray-700 mb-8">{message}</p>
             {planId && <p className="text-lg text-gray-600 mb-2">Your new plan: <span className="font-bold text-green-600">{planId.charAt(0).toUpperCase() + planId.slice(1)}</span></p>}
             {txRef && <p className="text-sm text-gray-500">Transaction Reference: <span className="font-mono">{txRef}</span></p>}
+            {userId && <p className="text-sm text-gray-500">User ID: <span className="font-mono">{userId}</span></p>} {/* NEW: Display userId */}
             <Link href="/" className="inline-flex items-center justify-center bg-gradient-to-r from-green-500 to-blue-500 text-white font-bold py-3 px-8 rounded-full text-lg shadow-lg transition duration-300 ease-in-out transform hover:scale-105 hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-green-300 mt-8">
               Go to Home
             </Link>

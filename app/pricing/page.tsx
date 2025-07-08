@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import Link from 'next/link';
+// import Link from 'next/link'; // REMOVED: Link is not directly used on this page for navigation
 import { useAuth } from '../../context/AuthContext'; // Import useAuth hook
 
 // Define the structure for a plan
@@ -131,9 +131,6 @@ export default function PricingPage() {
         body: JSON.stringify({
           planId: planId,
           userEmail: userEmailToSend,
-          // Paystack uses amount in kobo/cents for initialization,
-          // but we're passing the planId, so the backend will look up the amount.
-          // No need to send amount from frontend if backend holds plan details.
         }),
       });
 
