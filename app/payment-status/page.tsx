@@ -8,91 +8,85 @@ import { useAuth } from '../../context/AuthContext'; // Import useAuth hook
 
 function PaymentStatusContent() {
   const searchParams = useSearchParams();
-  const { user, loading: authLoading, refreshUser } = useAuth(); // Get refreshUser from context
-  const [status, setStatus] = useState<'success' | 'cancelled' | 'error' | 'verifying'>('verifying');
+  const { user, loading: authLoading, refreshUser } = useAuth();
+  const [displayStatus, setDisplayStatus] = useState<'success' | 'cancelled' | 'error' | 'verifying'>('verifying');
   const [message, setMessage] = useState('Verifying your payment status...');
   const [txRef, setTxRef] = useState<string | null>(null);
-  const [planId, setPlanId] = useState<string | null>(null);
-  const [userIdFromUrl, setUserIdFromUrl] = useState<string | null>(null); // Renamed to avoid conflict with user.uid
+  const [planIdFromUrl, setPlanIdFromUrl] = useState<string | null>(null);
+  const [userIdFromUrl, setUserIdFromUrl] = useState<string | null>(null);
+  const [retryAttempts, setRetryAttempts] = useState(0); // For retry logic
+
+  // Max retries for the frontend to wait for Firestore propagation
+  const MAX_RETRY_ATTEMPTS = 5;
+  const RETRY_DELAY_MS = 3000; // 3 seconds
 
   // Effect to parse URL params and set initial state
   useEffect(() => {
-    const paymentStatus = searchParams.get('status');
+    const paymentStatusParam = searchParams.get('status');
     const transactionRef = searchParams.get('tx_ref');
     const receivedPlanId = searchParams.get('planId');
     const receivedUserId = searchParams.get('userId');
 
     setTxRef(transactionRef);
-    setPlanId(receivedPlanId);
+    setPlanIdFromUrl(receivedPlanId);
     setUserIdFromUrl(receivedUserId);
 
-    if (paymentStatus === 'success') {
-      // If Paystack immediately says success, we still verify via webhook
-      setStatus('verifying');
-      setMessage('Payment successful! Confirming your plan update...');
-    } else if (paymentStatus === 'cancelled') {
-      setStatus('cancelled');
+    if (paymentStatusParam === 'cancelled') {
+      setDisplayStatus('cancelled');
       setMessage('Payment cancelled. You can try again or choose another plan.');
-    } else if (paymentStatus === 'callback') {
-      setStatus('verifying');
+    } else if (paymentStatusParam === 'callback' || paymentStatusParam === 'success') {
+      setDisplayStatus('verifying'); // Start in verifying state
       setMessage('Payment initiated. Please wait while we confirm your subscription. This may take a few moments.');
+      // No immediate refreshUser here, as onSnapshot in AuthContext should handle initial load
+      // The retry logic below will trigger refreshes if needed.
     } else {
-      setStatus('error');
-      setMessage('An error occurred during payment processing. Please try again.');
+      setDisplayStatus('error');
+      setMessage('An unexpected error occurred during payment processing. Please try again.');
     }
+  }, [searchParams]);
 
-    // Trigger a user data refresh shortly after the page loads if it's a callback/success state
-    // This helps ensure the AuthContext user object is up-to-date with Firestore
-    if (paymentStatus === 'success' || paymentStatus === 'callback') {
-      // Use a timeout to ensure AuthContext has had a chance to initialize
-      const initialRefreshTimeout = setTimeout(() => {
-        if (!authLoading && user) { // Only refresh if auth is ready and a user exists
-          console.log("PaymentStatusContent: Initial refreshUser triggered.");
-          refreshUser();
-        } else if (!authLoading && !user && receivedUserId) { // If no user but we have a temp ID, also refresh
-          console.log("PaymentStatusContent: Initial refreshUser triggered for unauthenticated user.");
-          refreshUser(); // This will trigger anonymous sign-in and then fetch data
-        }
-      }, 2000); // Give it 2 seconds
-
-      return () => clearTimeout(initialRefreshTimeout);
-    }
-
-  }, [searchParams, authLoading, user, refreshUser]); // Dependencies for this useEffect
-
-  // Effect to watch for user.subscriptionPlan changes from AuthContext
+  // Effect to watch for user.subscriptionPlan changes from AuthContext and retry if needed
   useEffect(() => {
-    // Only proceed if we are in 'verifying' state and AuthContext is loaded
-    if (status === 'verifying' && !authLoading && user && planId) {
-      console.log(`PaymentStatusContent: Watching user.subscriptionPlan. Current: ${user.subscriptionPlan}, Expected: ${planId}`);
-      if (user.subscriptionPlan === planId) {
+    let retryTimeout: NodeJS.Timeout;
+
+    // Only proceed if we are currently verifying, AuthContext is loaded, and we have an expected planId
+    if (displayStatus === 'verifying' && !authLoading && user && planIdFromUrl) {
+      console.log(`PaymentStatusContent: Watching user.subscriptionPlan. Current: ${user.subscriptionPlan}, Expected: ${planIdFromUrl}`);
+      
+      if (user.subscriptionPlan === planIdFromUrl) {
         console.log("PaymentStatusContent: User plan matches expected planId. Setting status to success.");
-        setStatus('success');
+        setDisplayStatus('success');
         setMessage('Payment confirmed and plan updated!');
+        setRetryAttempts(0); // Reset attempts on success
+      } else if (retryAttempts < MAX_RETRY_ATTEMPTS) {
+        console.log(`PaymentStatusContent: User plan does not match expected. Retrying in ${RETRY_DELAY_MS / 1000}s (Attempt ${retryAttempts + 1}/${MAX_RETRY_ATTEMPTS}).`);
+        retryTimeout = setTimeout(() => {
+          refreshUser(); // Trigger a refresh in AuthContext
+          setRetryAttempts(prev => prev + 1);
+        }, RETRY_DELAY_MS);
       } else {
-        // If user exists but plan doesn't match yet, and we're still verifying,
-        // it means the webhook might have hit, but the AuthContext hasn't fully propagated.
-        // Or, if the user was anonymous, the UID might have changed after anonymous login.
-        // We can trigger another refresh as a fallback.
-        console.log("PaymentStatusContent: User plan does not match expected. Triggering refreshUser.");
-        refreshUser();
+        console.warn("PaymentStatusContent: Max retry attempts reached. Plan still does not match.");
+        setDisplayStatus('error');
+        setMessage('Could not confirm payment status. Please check your account or contact support.');
       }
     }
-  }, [user, authLoading, planId, status, refreshUser]); // Dependencies for this useEffect
+
+    return () => clearTimeout(retryTimeout); // Cleanup timeout on unmount or re-run
+  }, [user, authLoading, planIdFromUrl, displayStatus, refreshUser, retryAttempts]);
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[calc(100vh-128px)] bg-gradient-to-br from-blue-50 to-green-50 p-6 text-center">
       <div className="max-w-xl mx-auto py-12 px-6 bg-white rounded-3xl shadow-xl border border-gray-100 transform transition duration-500 hover:scale-105 relative">
-        {status === 'success' && (
+        {displayStatus === 'success' && (
           <>
             <h1 className="text-5xl font-extrabold text-green-700 mb-4 leading-tight">
               Payment Successful! 🎉
             </h1>
             <p className="text-xl text-gray-700 mb-8">{message}</p>
-            {planId && <p className="text-lg text-gray-600 mb-2">Your new plan: <span className="font-bold text-green-600">{planId.charAt(0).toUpperCase() + planId.slice(1)}</span></p>}
+            {planIdFromUrl && <p className="text-lg text-gray-600 mb-2">Your new plan: <span className="font-bold text-green-600">{planIdFromUrl.charAt(0).toUpperCase() + planIdFromUrl.slice(1)}</span></p>}
             {txRef && <p className="text-sm text-gray-500">Transaction Reference: <span className="font-mono">{txRef}</span></p>}
             {userIdFromUrl && <p className="text-sm text-gray-500">User ID: <span className="font-mono">{userIdFromUrl}</span></p>}
-            {user && user.subscriptionPlan && user.subscriptionPlan !== planId && (
+            {user && user.subscriptionPlan && user.subscriptionPlan !== planIdFromUrl && (
               <p className="text-sm text-orange-500 mt-2">
                 Your current plan in app: <span className="font-bold">{user.subscriptionPlan.charAt(0).toUpperCase() + user.subscriptionPlan.slice(1)}</span> (may take a moment to fully update)
               </p>
@@ -103,7 +97,7 @@ function PaymentStatusContent() {
           </>
         )}
 
-        {status === 'cancelled' && (
+        {displayStatus === 'cancelled' && (
           <>
             <h1 className="text-5xl font-extrabold text-yellow-700 mb-4 leading-tight">
               Payment Cancelled 😔
@@ -115,7 +109,7 @@ function PaymentStatusContent() {
           </>
         )}
 
-        {status === 'error' && (
+        {displayStatus === 'error' && (
           <>
             <h1 className="text-5xl font-extrabold text-red-700 mb-4 leading-tight">
               Payment Error ⚠️
@@ -127,7 +121,7 @@ function PaymentStatusContent() {
           </>
         )}
 
-        {status === 'verifying' && (
+        {displayStatus === 'verifying' && (
           <>
             <h1 className="text-5xl font-extrabold text-blue-700 mb-4 leading-tight">
               Verifying Payment... 🔄
