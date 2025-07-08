@@ -13,7 +13,6 @@ from datetime import datetime, date, timedelta
 import hmac # For webhook verification
 import hashlib # For webhook verification
 
-# NEW: Import httpx for async HTTP requests
 import httpx
 
 from openai import OpenAI
@@ -77,7 +76,7 @@ try:
 except Exception as e:
     print(f"CRITICAL ERROR: Failed to initialize Firebase Admin SDK: {e}")
 
-# Define subscription plans and their details for Paystack - UPDATED WITH YOUR PLAN CODES
+# Define subscription plans and their details for Paystack - UPDATED WITH YOUR NEW PLAN CODES
 SUBSCRIPTION_PLANS = {
     "free": {
         "gemini_quota": 500, # TEMPORARILY INCREASED FOR TESTING
@@ -93,7 +92,7 @@ SUBSCRIPTION_PLANS = {
         "model_preference": "gpt4o",
         "amount_kes_cents": 70000, # KES 700.00 -> 70000 cents
         "currency": "KES",
-        "paystack_plan_code": "PLN_pb8kloxtu8n3bh1" # YOUR ACTUAL BASIC PLAN CODE
+        "paystack_plan_code": "PLN_lrkikt1qz6r5mig" # YOUR ACTUAL BASIC PLAN CODE - UPDATED
     },
     "standard": {
         "gemini_quota": -1,
@@ -101,7 +100,7 @@ SUBSCRIPTION_PLANS = {
         "model_preference": "gpt4o",
         "amount_kes_cents": 280000, # KES 2800.00 -> 280000 cents
         "currency": "KES",
-        "paystack_plan_code": "PLN_qc9ae75bvut0h0h" # YOUR ACTUAL STANDARD PLAN CODE
+        "paystack_plan_code": "PLN_9v76fs96u1us4o0" # YOUR ACTUAL STANDARD PLAN CODE - UPDATED
     },
     "premium": {
         "gemini_quota": -1,
@@ -109,7 +108,7 @@ SUBSCRIPTION_PLANS = {
         "model_preference": "gpt4o",
         "amount_kes_cents": 1400000, # KES 14000.00 -> 1400000 cents
         "currency": "KES",
-        "paystack_plan_code": "PLN_x3g9ffyjwiy74" # YOUR ACTUAL PREMIUM PLAN CODE
+        "paystack_plan_code": "PLN_smf4ocf5w0my58c" # YOUR ACTUAL PREMIUM PLAN CODE - UPDATED
     },
 }
 
@@ -388,7 +387,9 @@ async def create_paystack_payment(request: Request, x_user_id: str = Header(...,
 
 # NEW ENDPOINT: Paystack Webhook Handler
 @app.post("/paystack-webhook")
-async def paystack_webhook(request: Request, raw_body: bytes = Body(...)):
+async def paystack_webhook(request: Request): # Removed raw_body parameter
+    raw_body = await request.body() # Get raw body using request.body()
+    
     if not PAYSTACK_SECRET_KEY:
         print("ERROR: PAYSTACK_SECRET_KEY is not set. Webhook verification skipped.")
         raise HTTPException(status_code=500, detail="Paystack secret key not configured for webhooks.")
@@ -452,7 +453,6 @@ async def paystack_webhook(request: Request, raw_body: bytes = Body(...)):
             print(f"WARNING: Missing user_id ({user_id}) or plan_id ({plan_id}) or db not initialized for Paystack webhook (charge.success).")
 
     elif event_type == 'subscription.create' or event_type == 'subscription.not_renew' or event_type == 'subscription.disable':
-        # subscription.disable is important for cancellations
         subscription_data = event['data']
         customer_code = subscription_data.get('customer', {}).get('customer_code')
         subscription_status = subscription_data.get('status')
@@ -470,8 +470,8 @@ async def paystack_webhook(request: Request, raw_body: bytes = Body(...)):
                     user_doc = docs[0]
                     user_id = user_doc.id
                     
-                    new_plan_id = "free" # Default to free if no matching plan found or subscription is disabled
-                    if subscription_status != 'disabled': # Only map to paid plan if not disabled
+                    new_plan_id = "free"
+                    if subscription_status != 'disabled':
                         for p_id, p_info in SUBSCRIPTION_PLANS.items():
                             if p_info.get("paystack_plan_code") == plan_code:
                                 new_plan_id = p_id
