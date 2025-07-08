@@ -45,7 +45,7 @@ export default function UploadPage() {
     try {
       const response = await fetch(API_ENDPOINT, {
         method: 'POST',
-        // When using FormData, the 'Content-Type' header for 'multipart/form-data'
+        // When using FormData, the 'Content-Type' header for 'multipart/form-form-data'
         // is automatically set by the browser/fetch API, including the necessary boundary.
         // DO NOT manually set 'Content-Type': 'multipart/form-data' here.
         body: formData,
@@ -77,8 +77,8 @@ export default function UploadPage() {
       <div className="w-full max-w-xl bg-white rounded-3xl shadow-xl border border-gray-100 p-8 mt-8 text-center">
         <h1 className="text-3xl font-extrabold text-purple-700 mb-6">Analyze Your Skin 📸</h1>
 
-        {/* Image Uploader Component */}
-        <ImageUploader onImageSelected={handleImageSelected} />
+        {/* Image Uploader Component - NOW PASSING isLoading PROP */}
+        <ImageUploader onImageSelected={handleImageSelected} isLoading={loading} />
 
         {/* Display selected image preview and Analyze button */}
         {imagePreviewUrl && ( // Check if imagePreviewUrl is not null
