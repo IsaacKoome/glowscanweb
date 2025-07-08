@@ -7,6 +7,7 @@ import { FirebaseApp } from 'firebase/app';
 import { auth } from '../lib/firebase';
 import { useRouter } from 'next/navigation';
 
+// Firestore instance
 const db: Firestore = getFirestore(auth.app as FirebaseApp);
 
 interface UserData {
@@ -19,7 +20,7 @@ interface UserData {
   paystackCustomerId?: string;
   paystackSubscriptionStatus?: string;
   paystackLastTxRef?: string;
-  paystackSubscriptionCode?: string;
+  [key: string]: any; // catch-all for extra Firestore fields
 }
 
 interface AuthContextType {
@@ -42,26 +43,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const userDocRef: DocumentReference = doc(db, 'users', firebaseUser.uid);
     console.log(`AuthContext: Setting up onSnapshot listener for user ${firebaseUser.uid}`);
 
-    const unsubscribe = onSnapshot(userDocRef, async (docSnap) => {
+    const unsubscribe = onSnapshot(userDocRef, (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
-        const updatedUser: UserData = {
+
+        const updatedUserData: UserData = {
           uid: firebaseUser.uid,
           email: firebaseUser.email,
-          subscriptionPlan: data.subscriptionPlan || 'free',
-          geminiCountToday: data.geminiCountToday || 0,
-          gpt4oCountToday: data.gpt4oCountToday || 0,
-          lastAnalysisDate: data.lastAnalysisDate || new Date().toISOString().split('T')[0],
-          paystackCustomerId: data.paystackCustomerId || undefined,
-          paystackSubscriptionStatus: data.paystackSubscriptionStatus || undefined,
-          paystackLastTxRef: data.paystackLastTxRef || undefined,
-          paystackSubscriptionCode: data.paystackSubscriptionCode || undefined,
-          ...data,
+          ...data, // Spread first
+          subscriptionPlan: data?.subscriptionPlan || 'free',
+          geminiCountToday: data?.geminiCountToday ?? 0,
+          gpt4oCountToday: data?.gpt4oCountToday ?? 0,
+          lastAnalysisDate: data?.lastAnalysisDate ?? new Date().toISOString().split('T')[0],
+          paystackCustomerId: data?.paystackCustomerId ?? undefined,
+          paystackSubscriptionStatus: data?.paystackSubscriptionStatus ?? undefined,
+          paystackLastTxRef: data?.paystackLastTxRef ?? undefined,
         };
-        setUser(updatedUser);
-        console.log(`AuthContext: onSnapshot updated user data: ${updatedUser.subscriptionPlan}`);
+
+        setUser(updatedUserData);
+        console.log(`AuthContext: onSnapshot updated user data: ${updatedUserData.subscriptionPlan}`);
       } else {
-        console.log(`AuthContext: User document missing. Creating default for ${firebaseUser.uid}`);
+        console.log(`AuthContext: User document for ${firebaseUser.uid} does not exist. Creating...`);
         const newUserData: UserData = {
           uid: firebaseUser.uid,
           email: firebaseUser.email,
@@ -70,12 +72,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           gpt4oCountToday: 0,
           lastAnalysisDate: new Date().toISOString().split('T')[0],
         };
-        await setDoc(userDocRef, newUserData, { merge: true });
-        setUser(newUserData);
+
+        setDoc(userDocRef, newUserData, { merge: true })
+          .then(() => {
+            console.log(`Firestore document created for new user: ${firebaseUser.uid}`);
+            setUser(newUserData);
+          })
+          .catch((error) => {
+            console.error("Error creating user document:", error);
+            setUser(newUserData);
+          });
       }
+
       setLoading(false);
-    }, (err) => {
-      console.error("AuthContext: onSnapshot error:", err);
+    }, (error) => {
+      console.error("Error listening to user document:", error);
       setLoading(false);
     });
 
@@ -88,14 +99,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (user === null) setLoading(true);
       onAuthStateChanged(auth, (firebaseUser) => {
         if (firebaseUser) {
-          setupUserListener(firebaseUser); // reconnect listener
+          setupUserListener(firebaseUser);
         } else {
           setUser(null);
           setLoading(false);
         }
       });
     } else {
-      console.log("AuthContext: No current user to refresh.");
       setUser(null);
       setLoading(false);
     }
@@ -106,7 +116,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let unsubscribeFirestore: () => void = () => {};
 
     const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
-      unsubscribeFirestore(); // cleanup previous listener
+      unsubscribeFirestore();
 
       if (firebaseUser) {
         console.log("AuthContext: onAuthStateChanged fired. User logged in:", firebaseUser.uid);
@@ -115,8 +125,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.log("AuthContext: No user logged in. Attempting anonymous sign-in.");
         try {
           await signInAnonymously(auth);
-        } catch (err) {
-          console.error("Error during anonymous sign-in:", err);
+        } catch (error) {
+          console.error("Error during anonymous sign-in:", error);
           setUser(null);
           setLoading(false);
         }
@@ -124,7 +134,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     return () => {
-      console.log("AuthContext: Cleanup");
+      console.log("AuthContext: Cleaning up listeners.");
       unsubscribeAuth();
       unsubscribeFirestore();
     };
@@ -133,10 +143,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = async () => {
     try {
       await firebaseSignOut(auth);
-      console.log("User signed out.");
+      console.log("User signed out successfully.");
       router.push('/login');
-    } catch (err) {
-      console.error("Error during logout:", err);
+    } catch (error) {
+      console.error("Error signing out:", error);
     }
   };
 
