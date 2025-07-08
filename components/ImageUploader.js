@@ -1,18 +1,18 @@
 // components/ImageUploader.js (or .tsx if it's a TypeScript file)
-// Assuming this component handles image display after upload.
-// You might need to adjust paths or props based on your actual implementation.
+// This component now solely handles the file input and passes the selected file and its URL to the parent.
+// The parent component (e.g., app/upload/page.tsx) will handle displaying the image preview and loading states.
 
-import Image from 'next/image'; // Import Next.js Image component
+import Image from 'next/image'; // Still imported, but its usage will be commented out or removed if not needed internally.
 
-export default function ImageUploader({ imageUrl, onImageUpload, isLoading }) {
-  // imageUrl: The URL of the image to display (e.g., from file input or API)
-  // onImageUpload: Function to handle when a new file is selected
-  // isLoading: Boolean to show a loading state
+export default function ImageUploader({ onImageSelected, isLoading }) { // Changed onImageUpload to onImageSelected, removed imageUrl
+  // onImageSelected: Function to call when a new file is selected, passes (file: File, url: string)
+  // isLoading: Boolean to indicate if the parent is processing (can be used to disable input)
 
   const handleFileChange = (event) => {
     if (event.target.files && event.target.files[0]) {
       const file = event.target.files[0];
-      onImageUpload(file); // Pass the file to the parent component
+      const fileUrl = URL.createObjectURL(file); // Create a URL for the selected file
+      onImageSelected(file, fileUrl); // Pass both the File object and its URL to the parent
     }
   };
 
@@ -25,9 +25,13 @@ export default function ImageUploader({ imageUrl, onImageUpload, isLoading }) {
         accept="image/*"
         onChange={handleFileChange}
         className="mb-4 p-2 border rounded-lg"
-        disabled={isLoading}
+        disabled={isLoading} // Disable input if parent is loading
       />
 
+      {/* The loading spinner and image preview logic are now expected to be handled by the parent component (app/upload/page.tsx).
+          This component's responsibility is just to provide the file input.
+      */}
+      {/*
       {isLoading && (
         <div className="flex items-center justify-center p-4">
           <svg className="animate-spin h-8 w-8 text-purple-500 mr-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -40,12 +44,11 @@ export default function ImageUploader({ imageUrl, onImageUpload, isLoading }) {
 
       {imageUrl && !isLoading && (
         <div className="relative w-64 h-64 border-2 border-gray-300 rounded-lg overflow-hidden mt-4">
-          {/* Replaced <img> with <Image /> */}
           <Image
             src={imageUrl}
             alt="Uploaded Selfie"
-            layout="fill" // Use fill to make the image cover the parent div
-            objectFit="contain" // Or 'cover' depending on desired cropping
+            layout="fill"
+            objectFit="contain"
             className="rounded-lg"
           />
         </div>
@@ -54,6 +57,7 @@ export default function ImageUploader({ imageUrl, onImageUpload, isLoading }) {
       {!imageUrl && !isLoading && (
         <p className="text-gray-500 mt-4">No image uploaded yet.</p>
       )}
+      */}
     </div>
   );
 }
