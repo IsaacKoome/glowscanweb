@@ -46,7 +46,7 @@ const plans: Plan[] = [
       'Ad-free experience'
     ],
     buttonText: 'Choose Basic',
-    paystackPlanCode: "PLN_pb8kloxtu8n3bh1", // YOUR ACTUAL BASIC PLAN CODE
+    paystackPlanCode: "PLN_lrkikt1qz6r5mig", // YOUR ACTUAL BASIC PLAN CODE
   },
   {
     id: 'standard',
@@ -62,7 +62,7 @@ const plans: Plan[] = [
     ],
     buttonText: 'Choose Standard',
     isPopular: true,
-    paystackPlanCode: "PLN_qc9ae75bvut0h0h", // YOUR ACTUAL STANDARD PLAN CODE
+    paystackPlanCode: "PLN_9v76fs96u1us4o0", // YOUR ACTUAL STANDARD PLAN CODE
   },
   {
     id: 'premium',
@@ -77,7 +77,7 @@ const plans: Plan[] = [
       'Personalized beauty consultations'
     ],
     buttonText: 'Choose Premium',
-    paystackPlanCode: "PLN_x3g9ffyjwiy74", // YOUR ACTUAL PREMIUM PLAN CODE
+    paystackPlanCode: "PLN_smf4ocf5w0my58c", // YOUR ACTUAL PREMIUM PLAN CODE
   },
 ];
 
