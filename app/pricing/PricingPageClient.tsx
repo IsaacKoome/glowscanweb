@@ -127,7 +127,6 @@ export default function PricingPageClient() {
     }
 
     // CRUCIAL: Ensure user is available and has a UID before proceeding
-    // This user.uid comes from Firebase Auth (anonymous or authenticated)
     if (!user || !user.uid) {
       console.error("User not authenticated or UID not available. Cannot initiate payment.");
       setPaymentError("Authentication required. Please wait for the page to load fully or refresh.");
@@ -168,15 +167,16 @@ export default function PricingPageClient() {
 
       const backendData = await response.json();
       const authorizationUrl = backendData.checkout_url || backendData.authorization_url;
-      const transactionReference = backendData.reference;
+      // ✅ FIX: Extract the reference from the backendData
+      const transactionReference = backendData.reference; 
 
-      if (authorizationUrl) {
+      if (authorizationUrl && transactionReference) { // Ensure reference is also present
         // Initialize Paystack payment on the frontend using the hook
         const config = {
-          reference: transactionReference,
+          reference: transactionReference, // ✅ Use the extracted reference here
           email: userEmailToSend,
           amount: amountInKobo,
-          publicKey: PAYSTACK_PUBLIC_KEY, // Use the constant here
+          publicKey: PAYSTACK_PUBLIC_KEY,
           channels: ['card', 'bank_transfer', 'ussd'],
           metadata: {
             userId: user.uid,
@@ -191,28 +191,25 @@ export default function PricingPageClient() {
             router.push(`/payment-status?status=cancelled&planId=${planId}&userId=${user.uid}`);
           },
         };
-        // This is the call that might be throwing the error.
-        // We'll wrap it in a try-catch to get a more specific message.
         try {
           console.log("Attempting to initialize Paystack on frontend with config:", config);
-          console.log("Paystack Public Key used:", config.publicKey); // Log the public key
-          console.log("Paystack Amount used (kobo):", config.amount); // Log the amount
+          console.log("Paystack Public Key used:", config.publicKey);
+          console.log("Paystack Amount used (kobo):", config.amount);
+          console.log("Paystack Reference used:", config.reference); // ✅ Log the reference
           initializePayment(config);
         } catch (paystackInitError: any) {
           console.error('Error calling initializePayment from react-paystack:', paystackInitError);
-          // If the error object has an 'issues' array, log it specifically
           if (paystackInitError.issues) {
             console.error('Paystack Initialization Issues:', paystackInitError.issues);
             setPaymentError(`Failed to open payment gateway: ${paystackInitError.message}. Issues: ${JSON.stringify(paystackInitError.issues)}`);
           } else {
             setPaymentError(paystackInitError.message || 'Failed to open payment gateway.');
           }
-          // Re-throw to be caught by the outer catch, leading to error page
           throw paystackInitError;
         }
 
       } else {
-        setPaymentError("No authorization URL received from Paystack backend.");
+        setPaymentError("No authorization URL or transaction reference received from Paystack backend.");
       }
 
     } catch (error: any) {
