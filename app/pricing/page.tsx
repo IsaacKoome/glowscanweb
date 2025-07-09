@@ -4,7 +4,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../context/AuthContext'; // Import useAuth hook
-// Removed PaystackProps import, will infer type directly from usePaystackPayment
 import { usePaystackPayment } from 'react-paystack'; 
 
 // Define the structure for a plan
@@ -87,25 +86,23 @@ const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://glowscan-bac
 
 export default function PricingPage() {
   const { user, loading: authLoading } = useAuth();
-  const router = useRouter();
-  const [loadingPayment, setLoadingPayment] = useState<string | null>(null); // To show loading state for specific plan button
+  const router = useRouter(); // router is used in handleSubscribeClick for redirection
+  const [loadingPayment, setLoadingPayment] = useState<string | null>(null);
   const [paymentError, setPaymentError] = useState<string | null>(null);
 
   // Paystack configuration hook
-  // Provide a default publicKey to satisfy the hook's argument requirement
   const initializePayment = usePaystackPayment({ 
     publicKey: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY || '',
-    // You can add other default config here if needed, e.g., currency
   });
 
   // Function to extract numerical amount from price string and convert to kobo
   const getAmountInKobo = useCallback((priceString: string): number | null => {
-    const numericPart = priceString.replace(/[^0-9.]/g, ''); // Remove non-numeric characters except dot
+    const numericPart = priceString.replace(/[^0-9.]/g, '');
     const amountKES = parseFloat(numericPart);
     if (isNaN(amountKES)) {
       return null;
     }
-    return Math.round(amountKES * 100); // Convert to kobo and round to nearest integer
+    return Math.round(amountKES * 100);
   }, []);
 
   const handleSubscribeClick = async (planId: string) => {
@@ -184,7 +181,7 @@ export default function PricingPage() {
           Unlock Your Full Glow Potential ✨
         </h1>
         <p className="text-xl text-gray-700">
-          Choose the perfect plan to elevate your skincare and makeup journey with the best model ever - WonderJoy AI.
+          Choose the perfect plan to elevate your skincare and makeup journey with WonderJoy AI.
         </p>
       </div>
 
