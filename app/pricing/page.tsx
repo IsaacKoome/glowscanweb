@@ -184,7 +184,7 @@ export default function PricingPage() {
           Unlock Your Full Glow Potential ✨
         </h1>
         <p className="text-xl text-gray-700">
-          Choose the perfect plan to elevate your skincare and makeup journey with WonderJoy AI.
+          Choose the perfect plan to elevate your skincare and makeup journey with the best model ever - WonderJoy AI.
         </p>
       </div>
 
