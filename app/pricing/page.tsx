@@ -1,22 +1,22 @@
 // app/pricing/page.tsx
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation'; // Keep useRouter, it will be used for redirection
-// Removed PaystackProps import, will let TypeScript infer the type for the config object
-import { useAuth } from '../../context/AuthContext'; // Import useAuth hook
-import { usePaystackPayment } from 'react-paystack'; // Keep usePaystackPayment, it will be used for payment initiation
+// Removed useEffect as it's no longer directly used in this component
+import React, { useState, useCallback } from 'react'; 
+import { useRouter } from 'next/navigation'; 
+import { useAuth } from '../../context/AuthContext'; 
+import { usePaystackPayment } from 'react-paystack'; 
 
 // Define the structure for a plan
 interface Plan {
   id: string;
   name: string;
-  price: string; // e.g., 'KES 700'
+  price: string; 
   priceDetails: string;
   features: string[];
   buttonText: string;
   isPopular?: boolean;
-  paystackPlanCode?: string | null; // Allow null for free plan
+  paystackPlanCode?: string | null; 
 }
 
 // Define your subscription plans
@@ -48,7 +48,7 @@ const plans: Plan[] = [
       'Ad-free experience'
     ],
     buttonText: 'Choose Basic',
-    paystackPlanCode: "PLN_lrkikt1qz6r5mig", // YOUR ACTUAL BASIC PLAN CODE
+    paystackPlanCode: "PLN_lrkikt1qz6r5mig", 
   },
   {
     id: 'standard',
@@ -64,7 +64,7 @@ const plans: Plan[] = [
     ],
     buttonText: 'Choose Standard',
     isPopular: true,
-    paystackPlanCode: "PLN_9v76fs96u1us4o0", // YOUR ACTUAL STANDARD PLAN CODE
+    paystackPlanCode: "PLN_9v76fs96u1us4o0", 
   },
   {
     id: 'premium',
@@ -79,16 +79,16 @@ const plans: Plan[] = [
       'Personalized beauty consultations'
     ],
     buttonText: 'Choose Premium',
-    paystackPlanCode: "PLN_smf4ocf5w0my58c", // YOUR ACTUAL PREMIUM PLAN CODE - Make sure this is correct for Premium
+    paystackPlanCode: "PLN_smf4ocf5w0my58c", 
   },
 ];
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://glowscan-backend-241128138627.us-central1.run.app'; // Use env var or fallback
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://glowscan-backend-241128138627.us-central1.run.app'; 
 
 export default function PricingPage() {
   const { user, loading: authLoading } = useAuth();
-  const router = useRouter(); // router is now explicitly used for navigation
-  const [loadingPayment, setLoadingPayment] = useState<string | null>(null); // To show loading state for specific plan button
+  const router = useRouter(); 
+  const [loadingPayment, setLoadingPayment] = useState<string | null>(null); 
   const [paymentError, setPaymentError] = useState<string | null>(null);
 
   // Paystack configuration hook. The publicKey is passed here to initialize the hook.
@@ -98,13 +98,13 @@ export default function PricingPage() {
 
   // Function to extract numerical amount from price string and convert to kobo
   const getAmountInKobo = useCallback((priceString: string): number | null => {
-    const numericPart = priceString.replace(/[^0-9.]/g, ''); // Remove non-numeric characters except dot
+    const numericPart = priceString.replace(/[^0-9.]/g, ''); 
     const amountKES = parseFloat(numericPart);
     if (isNaN(amountKES)) {
       return null;
     }
-    return Math.round(amountKES * 100); // Convert to kobo and round to nearest integer
-  }, []); // useEffect is implicitly used by useCallback if it has dependencies, but here it's fine.
+    return Math.round(amountKES * 100); 
+  }, []); 
 
   const handleSubscribeClick = async (planId: string) => {
     // Prevent multiple clicks or clicks while auth is loading
@@ -147,41 +147,38 @@ export default function PricingPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-User-ID': user.uid, // Send the Firebase UID to the backend
+          'X-User-ID': user.uid, 
         },
         body: JSON.stringify({
           planId: planId,
           userEmail: userEmailToSend,
-          amount: amountInKobo, // Send amount to backend for verification/record
-          userId: user.uid, // Also send in body for consistency, backend should prefer X-User-ID header
+          amount: amountInKobo, 
+          userId: user.uid, 
         }),
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.detail || 'Failed to initialize payment with backend.');
+        throw new Error(errorData.detail || 'Failed to initiate payment with backend.');
       }
 
       const backendData = await response.json();
-      const authorizationUrl = backendData.checkout_url || backendData.authorization_url; // Handle both potential keys
-      const transactionReference = backendData.reference; // Assuming backend returns the reference
+      const authorizationUrl = backendData.checkout_url || backendData.authorization_url; 
+      const transactionReference = backendData.reference; 
 
       if (authorizationUrl) {
         // Step 2: Initialize Paystack payment on the frontend using the hook
-        // This will open the Paystack modal/redirect based on Paystack's configuration
-        // Removed explicit type annotation for 'config' to let TypeScript infer it
         const config = { 
-          reference: transactionReference, // Use the reference from the backend
+          reference: transactionReference, 
           email: userEmailToSend,
-          amount: amountInKobo, // Amount in kobo
+          amount: amountInKobo, 
           publicKey: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY || '',
-          channels: ['card', 'bank_transfer', 'ussd'], // Allowed payment channels
+          channels: ['card', 'bank_transfer', 'ussd'], 
           metadata: {
             userId: user.uid,
             planId: planId,
           },
-          // IMPORTANT: Use router.push in onSuccess and onClose
-          onSuccess: (response: any) => { // Added type 'any' for response to avoid further type issues
+          onSuccess: (response: any) => { 
             console.log('Paystack Success:', response);
             router.push(`/payment-status?status=success&tx_ref=${response.reference}&planId=${planId}&userId=${user.uid}`);
           },
@@ -190,7 +187,7 @@ export default function PricingPage() {
             router.push(`/payment-status?status=cancelled&planId=${planId}&userId=${user.uid}`);
           },
         };
-        initializePayment(config); // This call will now be recognized as usage
+        initializePayment(config); 
       } else {
         setPaymentError("No authorization URL received from Paystack backend.");
       }
@@ -198,7 +195,6 @@ export default function PricingPage() {
     } catch (error: any) {
       console.error('Payment initiation error:', error);
       setPaymentError(error.message || 'An unexpected error occurred during payment initiation.');
-      // Also redirect to error status page if an error occurs before Paystack modal opens
       router.push(`/payment-status?status=error&planId=${planId}&userId=${user?.uid || 'unknown'}`);
     } finally {
       setLoadingPayment(null);
@@ -232,7 +228,7 @@ export default function PricingPage() {
               flex flex-col p-6 sm:p-8 transform transition duration-300 hover:scale-105
               relative
               ${plan.isPopular ? 'border-purple-500 ring-4 ring-purple-200' : 'border-gray-100'}
-              ${user?.subscriptionPlan === plan.id ? 'bg-indigo-50' : ''} {/* Highlight current plan */}
+              ${user?.subscriptionPlan === plan.id ? 'bg-indigo-50' : ''} 
             `}
           >
             {plan.isPopular && (
@@ -267,11 +263,11 @@ export default function PricingPage() {
                 ${loadingPayment === plan.id ? 'opacity-50 cursor-not-allowed' : ''}
               `}
               disabled={
-                plan.id === 'free' || // Free plan is not clickable for subscription
-                user?.subscriptionPlan === plan.id || // User already has this plan
-                loadingPayment === plan.id || // This specific plan's payment is loading
-                authLoading || // Auth state is still loading (Firebase not ready)
-                !user // User object is not yet available (initial load before anonymous sign-in)
+                plan.id === 'free' || 
+                user?.subscriptionPlan === plan.id || 
+                loadingPayment === plan.id || 
+                authLoading || 
+                !user 
               }
             >
               {authLoading ? 'Loading...' : loadingPayment === plan.id ? 'Processing...' : (user?.subscriptionPlan === plan.id ? 'Current Plan' : plan.buttonText)}
