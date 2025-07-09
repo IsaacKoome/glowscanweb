@@ -86,6 +86,7 @@ const plans: Plan[] = [
 ];
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://glowscan-backend-241128138627.us-central1.run.app';
+const PAYSTACK_PUBLIC_KEY = process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY || ''; // Get it once
 
 export default function PricingPageClient() {
   const { user, loading: authLoading } = useAuth();
@@ -94,9 +95,8 @@ export default function PricingPageClient() {
   const [paymentError, setPaymentError] = useState<string | null>(null);
 
   // Call usePaystackPayment at the top level of this client component
-  // This hook will now only be executed in the browser environment due to the wrapper structure.
   const initializePayment = usePaystackPayment({
-    publicKey: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY || '',
+    publicKey: PAYSTACK_PUBLIC_KEY, // Use the constant here
   });
 
   // Function to extract numerical amount from price string and convert to kobo
@@ -176,7 +176,7 @@ export default function PricingPageClient() {
           reference: transactionReference,
           email: userEmailToSend,
           amount: amountInKobo,
-          publicKey: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY || '',
+          publicKey: PAYSTACK_PUBLIC_KEY, // Use the constant here
           channels: ['card', 'bank_transfer', 'ussd'],
           metadata: {
             userId: user.uid,
@@ -194,10 +194,19 @@ export default function PricingPageClient() {
         // This is the call that might be throwing the error.
         // We'll wrap it in a try-catch to get a more specific message.
         try {
+          console.log("Attempting to initialize Paystack on frontend with config:", config);
+          console.log("Paystack Public Key used:", config.publicKey); // Log the public key
+          console.log("Paystack Amount used (kobo):", config.amount); // Log the amount
           initializePayment(config);
         } catch (paystackInitError: any) {
           console.error('Error calling initializePayment from react-paystack:', paystackInitError);
-          setPaymentError(paystackInitError.message || 'Failed to open payment gateway.');
+          // If the error object has an 'issues' array, log it specifically
+          if (paystackInitError.issues) {
+            console.error('Paystack Initialization Issues:', paystackInitError.issues);
+            setPaymentError(`Failed to open payment gateway: ${paystackInitError.message}. Issues: ${JSON.stringify(paystackInitError.issues)}`);
+          } else {
+            setPaymentError(paystackInitError.message || 'Failed to open payment gateway.');
+          }
           // Re-throw to be caught by the outer catch, leading to error page
           throw paystackInitError;
         }
