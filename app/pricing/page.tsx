@@ -1,15 +1,17 @@
 // app/pricing/page.tsx
 "use client";
 
-import React, { useState, useEffect } from 'react';
-// import Link from 'next/link'; // REMOVED: Link is not directly used on this page for navigation
+import React, { useState, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '../../context/AuthContext'; // Import useAuth hook
+// Removed PaystackProps import, will infer type directly from usePaystackPayment
+import { usePaystackPayment } from 'react-paystack'; 
 
 // Define the structure for a plan
 interface Plan {
   id: string;
   name: string;
-  price: string;
+  price: string; // e.g., 'KES 700'
   priceDetails: string;
   features: string[];
   buttonText: string;
@@ -31,7 +33,7 @@ const plans: Plan[] = [
       'No credit card required'
     ],
     buttonText: 'Current Plan',
-    paystackPlanCode: null, // FIXED: Changed "null" string to actual null
+    paystackPlanCode: null,
   },
   {
     id: 'basic',
@@ -77,74 +79,94 @@ const plans: Plan[] = [
       'Personalized beauty consultations'
     ],
     buttonText: 'Choose Premium',
-    paystackPlanCode: "PLN_smf4ocf5w0my58c", // YOUR ACTUAL PREMIUM PLAN CODE
+    paystackPlanCode: "PLN_smf4ocf5w0my58c", // YOUR ACTUAL PREMIUM PLAN CODE - Make sure this is correct for Premium
   },
 ];
 
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://glowscan-backend-241128138627.us-central1.run.app'; // Use env var or fallback
+
 export default function PricingPage() {
   const { user, loading: authLoading } = useAuth();
+  const router = useRouter();
   const [loadingPayment, setLoadingPayment] = useState<string | null>(null); // To show loading state for specific plan button
   const [paymentError, setPaymentError] = useState<string | null>(null);
 
-  // Get temporary user ID for unauthenticated users
-  const [tempUserId, setTempUserId] = useState<string | null>(null);
-  useEffect(() => {
-    if (!authLoading && !user && !tempUserId) {
-      const storedTempId = localStorage.getItem('tempUserId');
-      if (storedTempId) {
-        setTempUserId(storedTempId);
-      } else {
-        const newTempId = crypto.randomUUID();
-        localStorage.setItem('tempUserId', newTempId);
-        setTempUserId(newTempId);
-      }
+  // Paystack configuration hook
+  // Provide a default publicKey to satisfy the hook's argument requirement
+  const initializePayment = usePaystackPayment({ 
+    publicKey: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY || '',
+    // You can add other default config here if needed, e.g., currency
+  });
+
+  // Function to extract numerical amount from price string and convert to kobo
+  const getAmountInKobo = useCallback((priceString: string): number | null => {
+    const numericPart = priceString.replace(/[^0-9.]/g, ''); // Remove non-numeric characters except dot
+    const amountKES = parseFloat(numericPart);
+    if (isNaN(amountKES)) {
+      return null;
     }
-  }, [authLoading, user, tempUserId]);
+    return Math.round(amountKES * 100); // Convert to kobo and round to nearest integer
+  }, []);
 
   const handleSubscribeClick = async (planId: string) => {
+    // Prevent multiple clicks or clicks while auth is loading
+    if (loadingPayment || authLoading) {
+      console.log("Payment already loading or authentication in progress.");
+      return;
+    }
+
     setLoadingPayment(planId);
     setPaymentError(null);
 
     const selectedPlan = plans.find(p => p.id === planId);
-    // Check if selectedPlan exists AND if it has a valid paystackPlanCode (not null or undefined)
-    if (!selectedPlan || !selectedPlan.paystackPlanCode) { // This condition will now correctly catch the free plan
+    if (!selectedPlan || !selectedPlan.paystackPlanCode) {
       setPaymentError("Invalid plan selected or missing Paystack plan code.");
       setLoadingPayment(null);
       return;
     }
 
-    const userIdToSend = user ? user.uid : tempUserId;
-    const userEmailToSend = user ? user.email : `${userIdToSend}@wonderjoy.ai`; // Use real email if logged in
+    // CRUCIAL: Ensure user is available and has a UID before proceeding
+    if (!user || !user.uid) {
+      console.error("User not authenticated or UID not available. Cannot initiate payment.");
+      setPaymentError("Authentication required. Please wait for the page to load fully or refresh.");
+      setLoadingPayment(null);
+      return;
+    }
 
-    if (!userIdToSend) {
-      setPaymentError("User identifier missing. Please log in or refresh the page.");
+    const amountInKobo = getAmountInKobo(selectedPlan.price);
+    if (amountInKobo === null) {
+      setPaymentError("Could not determine plan price. Please try again.");
       setLoadingPayment(null);
       return;
     }
 
     try {
-      const response = await fetch('https://glowscan-backend-241128138627.us-central1.run.app/create-paystack-payment', {
+      // Step 1: Call your backend to initialize the Paystack transaction
+      const response = await fetch(`${BACKEND_URL}/create-paystack-payment`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-User-ID': userIdToSend, // Send the user ID to the backend
+          'X-User-ID': user.uid, // Send the Firebase UID to the backend
         },
         body: JSON.stringify({
           planId: planId,
-          userEmail: userEmailToSend,
+          userEmail: user.email || `${user.uid}@wonderjoy.ai`, // Use user's email or a fallback based on UID
+          amount: amountInKobo, // Amount in kobo
+          userId: user.uid, // Also send in body for consistency, backend should prefer X-User-ID header
         }),
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.detail || 'Failed to initiate payment with Paystack.');
+        throw new Error(errorData.detail || 'Failed to initialize payment with backend.');
       }
 
       const data = await response.json();
-      if (data.checkout_url) {
-        window.location.href = data.checkout_url; // Redirect to Paystack checkout page
+      if (data.authorization_url) { // Assuming backend returns authorization_url for redirect
+        // Step 2: Redirect to Paystack payment page
+        window.location.href = data.authorization_url;
       } else {
-        setPaymentError("No checkout URL received from Paystack.");
+        setPaymentError("No authorization URL received from Paystack.");
       }
 
     } catch (error: any) {
@@ -182,6 +204,7 @@ export default function PricingPage() {
               flex flex-col p-6 sm:p-8 transform transition duration-300 hover:scale-105
               relative
               ${plan.isPopular ? 'border-purple-500 ring-4 ring-purple-200' : 'border-gray-100'}
+              ${user?.subscriptionPlan === plan.id ? 'bg-indigo-50' : ''} {/* Highlight current plan */}
             `}
           >
             {plan.isPopular && (
@@ -209,15 +232,21 @@ export default function PricingPage() {
               className={`
                 mt-auto w-full py-3 px-6 rounded-full text-lg font-semibold shadow-lg
                 transition duration-300 ease-in-out transform hover:scale-105 hover:shadow-xl
-                ${plan.id === 'free'
+                ${(plan.id === 'free' || user?.subscriptionPlan === plan.id)
                   ? 'bg-gray-200 text-gray-700 cursor-not-allowed opacity-75'
                   : 'bg-gradient-to-r from-purple-600 to-pink-500 text-white focus:outline-none focus:ring-4 focus:ring-purple-300'
                 }
                 ${loadingPayment === plan.id ? 'opacity-50 cursor-not-allowed' : ''}
               `}
-              disabled={plan.id === 'free' || loadingPayment === plan.id || authLoading || (!user && !tempUserId)}
+              disabled={
+                plan.id === 'free' || // Free plan is not clickable for subscription
+                user?.subscriptionPlan === plan.id || // User already has this plan
+                loadingPayment === plan.id || // This specific plan's payment is loading
+                authLoading || // Auth state is still loading (Firebase not ready)
+                !user // User object is not yet available (initial load before anonymous sign-in)
+              }
             >
-              {loadingPayment === plan.id ? 'Processing...' : plan.buttonText}
+              {authLoading ? 'Loading...' : loadingPayment === plan.id ? 'Processing...' : (user?.subscriptionPlan === plan.id ? 'Current Plan' : plan.buttonText)}
             </button>
           </div>
         ))}
