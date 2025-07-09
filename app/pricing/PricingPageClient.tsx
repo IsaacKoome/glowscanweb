@@ -94,6 +94,7 @@ export default function PricingPageClient() {
   const [paymentError, setPaymentError] = useState<string | null>(null);
 
   // Call usePaystackPayment at the top level of this client component
+  // This hook will now only be executed in the browser environment due to the wrapper structure.
   const initializePayment = usePaystackPayment({
     publicKey: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY || '',
   });
@@ -190,13 +191,23 @@ export default function PricingPageClient() {
             router.push(`/payment-status?status=cancelled&planId=${planId}&userId=${user.uid}`);
           },
         };
-        initializePayment(config);
+        // This is the call that might be throwing the error.
+        // We'll wrap it in a try-catch to get a more specific message.
+        try {
+          initializePayment(config);
+        } catch (paystackInitError: any) {
+          console.error('Error calling initializePayment from react-paystack:', paystackInitError);
+          setPaymentError(paystackInitError.message || 'Failed to open payment gateway.');
+          // Re-throw to be caught by the outer catch, leading to error page
+          throw paystackInitError;
+        }
+
       } else {
         setPaymentError("No authorization URL received from Paystack backend.");
       }
 
     } catch (error: any) {
-      console.error('Payment initiation error:', error);
+      console.error('Payment initiation error (outer catch):', error);
       setPaymentError(error.message || 'An unexpected error occurred during payment initiation.');
       router.push(`/payment-status?status=error&planId=${planId}&userId=${user?.uid || 'unknown'}`);
     } finally {
@@ -244,7 +255,7 @@ export default function PricingPageClient() {
               <span className="text-5xl font-extrabold text-gray-900">{plan.price}</span>
               <span className="text-xl font-medium text-gray-600 ml-2">{plan.priceDetails}</span>
             </div>
-            <ul className="flex-grow space-y-3 text-gray-700 text-left mb-4"> {/* Adjusted margin-bottom */}
+            <ul className="flex-grow space-y-3 text-gray-700 text-left mb-4">
               {plan.features.map((feature, index) => (
                 <li key={index} className="flex items-center">
                   <svg className="h-6 w-6 text-green-500 mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">

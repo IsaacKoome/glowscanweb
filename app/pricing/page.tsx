@@ -1,14 +1,15 @@
 // app/pricing/page.tsx
-// This file is a Server Component by default.
+// This file is a Server Component by default in Next.js App Router.
 // It imports the client-side wrapper component.
 
 import PricingWrapper from './PricingWrapper'; // Import the new wrapper component
+import React from 'react'; // Import React for JSX.Suspense
 
 export default function PricingPage() {
   return (
     // Render the client-side wrapper component.
     // The actual client-side logic and hooks are encapsulated within PricingWrapper
-    // and its dynamically imported child (PricingPageClient).
+    // and its dynamically imported child (DynamicPricingPageClient).
     <PricingWrapper />
   );
 }
