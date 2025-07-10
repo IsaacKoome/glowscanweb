@@ -182,6 +182,7 @@ export default function PricingPageClient() {
           amount: amountInKobo,
           publicKey: PAYSTACK_PUBLIC_KEY,
           channels: ['card', 'bank_transfer', 'ussd'],
+          plan: selectedPlan.paystackPlanCode, // <--- THIS WAS THE MISSING LINE!
           metadata: {
             userId: user.uid,
             planId: planId,
@@ -206,7 +207,7 @@ export default function PricingPageClient() {
         console.log("  amount (kobo):", config.amount);
         console.log("  email:", config.email);
         console.log("  reference:", config.reference);
-        console.log("  plan:", selectedPlan.paystackPlanCode);
+        console.log("  plan:", config.plan); // Log the plan from the config object
         console.log("  channels:", config.channels);
         console.log("  metadata:", config.metadata);
         // --- END DEBUGGING LOGS ---
@@ -266,7 +267,6 @@ export default function PricingPageClient() {
               flex flex-col p-6 sm:p-8 transform transition duration-300 hover:scale-105
               relative
               ${plan.isPopular ? 'border-purple-500 ring-4 ring-purple-200' : 'border-gray-100'}
-              ${user?.subscriptionPlan === plan.id ? 'bg-indigo-50' : ''} {/* Highlight current plan */}
             `}
           >
             {plan.isPopular && (
