@@ -95,24 +95,27 @@ export default function PricingPageClient() {
   const [paymentError, setPaymentError] = useState<string | null>(null);
 
   // Call usePaystackPayment at the top level of this client component
+  // We pass an empty config initially, and then a full config to the returned function
   const initializePayment = usePaystackPayment({
-    publicKey: PAYSTACK_PUBLIC_KEY, // Use the constant here
+    publicKey: PAYSTACK_PUBLIC_KEY, // Pass the public key here
   });
 
   // Function to extract numerical amount from price string and convert to kobo
   const getAmountInKobo = useCallback((priceString: string): number | null => {
+    // Remove non-numeric characters except for the dot, then parse as float
     const numericPart = priceString.replace(/[^0-9.]/g, '');
     const amountKES = parseFloat(numericPart);
     if (isNaN(amountKES)) {
       return null;
     }
+    // Convert to kobo/cents (multiply by 100) and round to nearest integer
     return Math.round(amountKES * 100);
   }, []);
 
   const handleSubscribeClick = async (planId: string) => {
     // Prevent multiple clicks or clicks while auth is loading
     if (loadingPayment || authLoading) {
-      console.log("Payment already loading or authentication in progress.");
+      console.log("Payment already loading or authentication in progress. Aborting click.");
       return;
     }
 
@@ -146,6 +149,7 @@ export default function PricingPageClient() {
 
     try {
       // Step 1: Call your backend to initialize the Paystack transaction
+      console.log(`Frontend: Calling backend ${BACKEND_URL}/create-paystack-payment with planId: ${planId}, userEmail: ${userEmailToSend}, userId: ${user.uid}`);
       const response = await fetch(`${BACKEND_URL}/create-paystack-payment`, {
         method: 'POST',
         headers: {
@@ -155,25 +159,25 @@ export default function PricingPageClient() {
         body: JSON.stringify({
           planId: planId,
           userEmail: userEmailToSend,
-          amount: amountInKobo, // Send amount to backend for verification/record
+          amount: amountInKobo, // Send amount to backend for verification/record (optional, but good for consistency)
           userId: user.uid, // Also send in body for consistency, backend should prefer X-User-ID header
         }),
       });
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => response.text());
+        console.error("Backend payment initiation failed:", errorData);
         throw new Error(errorData.detail || 'Failed to initialize payment with backend.');
       }
 
       const backendData = await response.json();
       const authorizationUrl = backendData.checkout_url || backendData.authorization_url;
-      // ✅ FIX: Extract the reference from the backendData
-      const transactionReference = backendData.reference; 
+      const transactionReference = backendData.reference; // Extract the reference from the backendData
 
       if (authorizationUrl && transactionReference) { // Ensure reference is also present
-        // Initialize Paystack payment on the frontend using the hook
+        // Step 2: Initialize Paystack payment on the frontend using the hook
         const config = {
-          reference: transactionReference, // ✅ Use the extracted reference here
+          reference: transactionReference, // Use the extracted reference here
           email: userEmailToSend,
           amount: amountInKobo,
           publicKey: PAYSTACK_PUBLIC_KEY,
@@ -182,21 +186,33 @@ export default function PricingPageClient() {
             userId: user.uid,
             planId: planId,
           },
+          // Paystack callback_url is primarily for handling redirects after payment,
+          // but webhooks are the most reliable for status updates.
+          // You can set it if needed, but it's often handled by the backend.
+          // callback_url: `https://www.wonderjoyai.com/payment-status?tx_ref=${transactionReference}&status=callback&planId=${planId}&userId=${user.uid}`,
           onSuccess: (response: any) => {
-            console.log('Paystack Success:', response);
+            console.log('Paystack Success Callback:', response);
             router.push(`/payment-status?status=success&tx_ref=${response.reference}&planId=${planId}&userId=${user.uid}`);
           },
           onClose: () => {
-            console.log('Paystack Closed');
+            console.log('Paystack Closed Callback');
             router.push(`/payment-status?status=cancelled&planId=${planId}&userId=${user.uid}`);
           },
         };
+        
+        // --- DEBUGGING LOGS ---
+        console.log("Frontend: Attempting to initialize Paystack with config:");
+        console.log("  publicKey:", config.publicKey);
+        console.log("  amount (kobo):", config.amount);
+        console.log("  email:", config.email);
+        console.log("  reference:", config.reference);
+        console.log("  plan:", selectedPlan.paystackPlanCode);
+        console.log("  channels:", config.channels);
+        console.log("  metadata:", config.metadata);
+        // --- END DEBUGGING LOGS ---
+
         try {
-          console.log("Attempting to initialize Paystack on frontend with config:", config);
-          console.log("Paystack Public Key used:", config.publicKey);
-          console.log("Paystack Amount used (kobo):", config.amount);
-          console.log("Paystack Reference used:", config.reference); // ✅ Log the reference
-          initializePayment(config);
+          initializePayment(config); // Call the function returned by usePaystackPayment
         } catch (paystackInitError: any) {
           console.error('Error calling initializePayment from react-paystack:', paystackInitError);
           if (paystackInitError.issues) {
@@ -205,6 +221,7 @@ export default function PricingPageClient() {
           } else {
             setPaymentError(paystackInitError.message || 'Failed to open payment gateway.');
           }
+          // Re-throw to ensure it's caught by the outer catch block and loading state is reset
           throw paystackInitError;
         }
 
@@ -215,9 +232,10 @@ export default function PricingPageClient() {
     } catch (error: any) {
       console.error('Payment initiation error (outer catch):', error);
       setPaymentError(error.message || 'An unexpected error occurred during payment initiation.');
+      // Redirect to error status page if an error occurs before Paystack modal opens
       router.push(`/payment-status?status=error&planId=${planId}&userId=${user?.uid || 'unknown'}`);
     } finally {
-      setLoadingPayment(null);
+      setLoadingPayment(null); // Always reset loading state
     }
   };
 
