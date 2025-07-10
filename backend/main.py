@@ -121,27 +121,19 @@ def root():
 @app.post("/predict")
 async def predict(
     file: UploadFile = File(...),
-    # Added model_name as a Body parameter, assuming frontend sends it
-    model_name: str = Body(..., embed=True), 
     x_user_id: str = Header(..., alias="X-User-ID")
 ):
-    print(f"Received request for user: {x_user_id}, file: {file.filename}, requested model: {model_name}")
+    print(f"Received request for user: {x_user_id}, file: {file.filename}")
 
     if not db:
         print("ERROR: Firestore client is not initialized. Cannot manage quotas.")
         raise HTTPException(status_code=500, detail="Firestore not initialized. Cannot manage quotas.")
     
-    user_ref = db.collection("users").document(x_user_id)
-    
+    user_data = {}
     try:
+        user_ref = db.collection("users").document(x_user_id)
         user_doc = user_ref.get()
-        # Initialize user data with defaults if document doesn't exist
-        user_data = user_doc.to_dict() if user_doc.exists else {
-            "subscriptionPlan": "free",
-            "lastAnalysisDate": None, # Will be set on first analysis
-            "geminiCountToday": 0,
-            "gpt4oCountToday": 0,
-        }
+        user_data = user_doc.to_dict() if user_doc.exists else {}
         print(f"Successfully fetched user data for {x_user_id}. Exists: {user_doc.exists}")
     except Exception as e:
         print(f"ERROR: Failed to fetch user data from Firestore for {x_user_id}: {e}")
@@ -156,39 +148,28 @@ async def predict(
 
     today_str = date.today().isoformat()
 
-    # Reset daily quotas if the last analysis was on a different day
     if last_analysis_date_str != today_str:
         gemini_count_today = 0
         gpt4o_count_today = 0
-        print(f"Daily quotas reset for user {x_user_id} as date changed.")
-    
-    # Get quotas for the current plan
+        print(f"Daily quotas reset for user {x_user_id}.")
+
     plan_quotas = SUBSCRIPTION_PLANS.get(current_plan, SUBSCRIPTION_PLANS["free"])
-
-    # Determine the model to use based on request and plan preference/quotas
+    
     model_to_use = ""
-    quota_exceeded_message = "Daily quota exceeded for this model. Consider upgrading your plan."
-
-    if model_name == "gemini":
-        gemini_limit = plan_quotas["gemini_quota"]
-        if gemini_limit == -1 or gemini_count_today < gemini_limit:
+    if plan_quotas["model_preference"] == "gpt4o" and openai_client:
+        if plan_quotas["gpt4o_quota"] == -1 or gpt4o_count_today < plan_quotas["gpt4o_quota"]:
+            model_to_use = "gpt4o"
+        elif plan_quotas["gemini_quota"] == -1 or gemini_count_today < plan_quotas["gemini_quota"]:
             model_to_use = "gemini"
         else:
-            raise HTTPException(status_code=429, detail=f"Gemini Flash quota ({gemini_limit} daily) exceeded for your {current_plan} plan. {quota_exceeded_message}")
-    elif model_name == "gpt4o":
-        gpt4o_limit = plan_quotas["gpt4o_quota"]
-        if gpt4o_limit == -1 or gpt4o_count_today < gpt4o_limit:
-            model_to_use = "gpt4o"
-        else:
-            raise HTTPException(status_code=429, detail=f"GPT-4o quota ({gpt4o_limit} daily) exceeded for your {current_plan} plan. {quota_exceeded_message}")
+            raise HTTPException(status_code=429, detail="Daily quota exceeded for all available models.")
     else:
-        raise HTTPException(status_code=400, detail="Invalid model name requested. Must be 'gemini' or 'gpt4o'.")
-
-    # Ensure the selected model is actually available
-    if model_to_use == "gpt4o" and not openai_client:
-        raise HTTPException(status_code=503, detail="GPT-4o model is not available due to missing API key.")
-    if model_to_use == "gemini" and not GOOGLE_API_KEY:
-        raise HTTPException(status_code=503, detail="Gemini model is not available due to missing API key.")
+        if plan_quotas["gemini_quota"] == -1 or gemini_count_today < plan_quotas["gemini_quota"]:
+            model_to_use = "gemini"
+        elif openai_client and (plan_quotas["gpt4o_quota"] == -1 or gpt4o_count_today < plan_quotas["gpt4o_quota"]):
+             model_to_use = "gpt4o"
+        else:
+            raise HTTPException(status_code=429, detail="Daily quota exceeded for all available models.")
 
     print(f"User {x_user_id} (Plan: {current_plan}) will use model: {model_to_use}")
 
@@ -311,19 +292,18 @@ Crucial Instructions:
             raise HTTPException(status_code=500, detail="AI returned an empty response.")
 
         try:
-            # This is where the quota is updated after a successful AI call
-            update_fields = {
-                "lastAnalysisDate": today_str
-            }
             if model_to_use == "gemini":
                 gemini_count_today += 1
-                update_fields["geminiCountToday"] = gemini_count_today
             elif model_to_use == "gpt4o":
                 gpt4o_count_today += 1
-                update_fields["gpt4oCountToday"] = gpt4o_count_today
 
-            user_ref.set(update_fields, merge=True)
-            print(f"Quota updated successfully for user {x_user_id}. Gemini: {gemini_count_today}, GPT4o: {gpt4o_count_today}")
+            user_ref.set({
+                "subscriptionPlan": current_plan,
+                "lastAnalysisDate": today_str,
+                "geminiCountToday": gemini_count_today,
+                "gpt4oCountToday": gpt4o_count_today
+            }, merge=True)
+            print(f"Quota updated successfully for user {x_user_id}.")
         except Exception as e:
             print(f"ERROR: Failed to update user quota in Firestore for {x_user_id}: {e}")
             import traceback
@@ -363,39 +343,31 @@ async def create_paystack_payment(request: Request, x_user_id: str = Header(...,
 
     try:
         async with httpx.AsyncClient() as client:
-            # Print the payload being sent to Paystack for debugging
-            payload = {
-                "email": user_email,
-                "amount": amount_in_cents, # Paystack expects amount in kobo/cents
-                "currency": plan_info["currency"],
-                "reference": tx_ref,
-                "plan": plan_info["paystack_plan_code"], # Link to the subscription plan
-                "metadata": {
-                    "userId": x_user_id,
-                    "planId": plan_id
-                },
-                "callback_url": f"https://www.wonderjoyai.com/payment-status?tx_ref={tx_ref}&status=callback&planId={plan_id}&userId={x_user_id}"
-            }
-            print(f"Sending to Paystack: {json.dumps(payload, indent=2)}") # Debugging line
-
             response = await client.post(
                 f"{PAYSTACK_API_BASE_URL}/transaction/initialize",
                 headers={
                     "Authorization": f"Bearer {PAYSTACK_SECRET_KEY}",
                     "Content-Type": "application/json"
                 },
-                json=payload
+                json={
+                    "email": user_email,
+                    "amount": amount_in_cents, # Paystack expects amount in kobo/cents
+                    "currency": plan_info["currency"],
+                    "reference": tx_ref,
+                    "plan": plan_info["paystack_plan_code"], # Link to the subscription plan
+                    "metadata": {
+                        "userId": x_user_id,
+                        "planId": plan_id
+                    },
+                    "callback_url": f"https://www.wonderjoyai.com/payment-status?tx_ref={tx_ref}&status=callback&planId={plan_id}&userId={x_user_id}"
+                }
             )
             response.raise_for_status() # Raise an exception for HTTP errors (4xx or 5xx)
             
             paystack_response = response.json()
 
             if paystack_response and paystack_response.get("status"):
-                # ✅ FIX: Return both checkout_url AND reference
-                return {
-                    "checkout_url": paystack_response["data"]["authorization_url"],
-                    "reference": tx_ref # Include the generated transaction reference
-                }
+                return {"checkout_url": paystack_response["data"]["authorization_url"]}
             else:
                 print(f"Paystack initiation failed: {paystack_response}")
                 raise HTTPException(status_code=500, detail=f"Paystack initiation failed: {paystack_response.get('message', 'Unknown error')}")
@@ -524,4 +496,3 @@ async def paystack_webhook(request: Request): # Removed raw_body parameter
             print(f"WARNING: Missing customer_code ({customer_code}) or db not initialized for subscription event.")
 
     return {"status": "success"}
-
