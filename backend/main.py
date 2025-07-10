@@ -385,6 +385,49 @@ async def create_paystack_payment(request: Request, x_user_id: str = Header(...,
         print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
 
+    
+
+@app.post("/cancel-subscription")
+async def cancel_subscription(x_user_id: str = Header(..., alias="X-User-ID")):
+    if not db:
+        raise HTTPException(status_code=500, detail="Firestore not initialized.")
+    if not PAYSTACK_SECRET_KEY:
+        raise HTTPException(status_code=500, detail="Paystack not configured.")
+
+    try:
+        # Fetch user
+        user_ref = db.collection("users").document(x_user_id)
+        user_doc = user_ref.get()
+        user_data = user_doc.to_dict() if user_doc.exists else {}
+        subscription_code = user_data.get("paystackSubscriptionCode")
+
+        if not subscription_code:
+            raise HTTPException(status_code=400, detail="No active subscription found.")
+
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{PAYSTACK_API_BASE_URL}/subscription/disable",
+                headers={
+                    "Authorization": f"Bearer {PAYSTACK_SECRET_KEY}",
+                    "Content-Type": "application/json"
+                },
+                json={"code": subscription_code, "token": " "},  # Token field required by Paystack
+            )
+            response.raise_for_status()
+
+        # Downgrade user immediately
+        user_ref.set({
+            "subscriptionPlan": "free",
+            "paystackSubscriptionStatus": "disabled"
+        }, merge=True)
+
+        return {"status": "cancelled"}
+
+    except Exception as e:
+        print(f"Error cancelling subscription: {e}")
+        raise HTTPException(status_code=500, detail="Cancellation failed.")
+
+
 # NEW ENDPOINT: Paystack Webhook Handler
 @app.post("/paystack-webhook")
 async def paystack_webhook(request: Request): # Removed raw_body parameter

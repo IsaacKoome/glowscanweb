@@ -34,6 +34,8 @@ export default function HeaderNavClient() {
           </Link>
         )}
       </nav>
+      <Link href="/billing" className="hover:underline text-purple-600">Billing</Link>
+
 
       {/* Auth Button - pushed to the far right within this flex container */}
       <div className="ml-0 sm:ml-auto"> {/* ml-auto on sm screens to push right, ml-0 on mobile */}
