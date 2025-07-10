@@ -1,10 +1,12 @@
+// app/billing/page.tsx
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react"; // Removed useEffect import as it was unused
 import { useAuth } from "../../context/AuthContext";
 
 export default function BillingDashboard() {
-  const { user, loading } = useAuth();
+  const { user, loading: authLoading } = useAuth(); // Renamed 'loading' to 'authLoading' for clarity
+
   const [status, setStatus] = useState<"idle" | "loading" | "cancelled" | "error">("idle");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -12,7 +14,7 @@ export default function BillingDashboard() {
   const isSubscribed = currentPlan !== "free";
 
   const handleCancelSubscription = async () => {
-    if (!user) return;
+    if (!user) return; // Should ideally not happen if button is disabled for unauthenticated users
     setStatus("loading");
     setErrorMessage(null);
 
@@ -31,11 +33,22 @@ export default function BillingDashboard() {
       }
 
       setStatus("cancelled");
+      // Optionally, you might want to call refreshUser() from AuthContext here
+      // to immediately update the user's plan in the frontend after cancellation.
+      // E.g., const { refreshUser } = useAuth(); and then refreshUser();
     } catch (err: any) {
       setStatus("error");
       setErrorMessage(err.message || "Something went wrong.");
     }
   };
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-50 py-12 px-6 sm:px-12 lg:px-24 flex items-center justify-center">
+        <p className="text-xl text-gray-700">Loading billing information...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-50 py-12 px-6 sm:px-12 lg:px-24">
