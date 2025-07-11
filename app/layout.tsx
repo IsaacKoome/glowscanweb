@@ -5,7 +5,7 @@ import { AuthProvider } from '../context/AuthContext'; // Only import AuthProvid
 import HeaderNavClient from '@/components/HeaderNavClient'; // Import the new client component
 
 export const metadata = {
-  title: 'WonderJoy AI',
+  title: '💫WonderJoy AI',
   description: 'AI-powered skin analysis and beauty assistant'
 };
 
