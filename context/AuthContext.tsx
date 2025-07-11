@@ -1,3 +1,4 @@
+//context/AuthContext
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
@@ -20,6 +21,7 @@ interface UserData {
   paystackCustomerId?: string;
   paystackSubscriptionStatus?: string;
   paystackLastTxRef?: string;
+  paystackSubscriptionCode?: string; // <-- ADDED THIS LINE
   [key: string]: any; // catch-all for extra Firestore fields
 }
 
@@ -58,10 +60,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           paystackCustomerId: data?.paystackCustomerId ?? undefined,
           paystackSubscriptionStatus: data?.paystackSubscriptionStatus ?? undefined,
           paystackLastTxRef: data?.paystackLastTxRef ?? undefined,
+          paystackSubscriptionCode: data?.paystackSubscriptionCode ?? undefined, // <-- ADDED/FIXED THIS LINE
         };
 
         setUser(updatedUserData);
         console.log(`AuthContext: onSnapshot updated user data: ${updatedUserData.subscriptionPlan}`);
+        // Log the subscription code to confirm it's being read
+        console.log(`AuthContext: paystackSubscriptionCode read from Firestore: ${updatedUserData.paystackSubscriptionCode}`);
       } else {
         console.log(`AuthContext: User document for ${firebaseUser.uid} does not exist. Creating...`);
         const newUserData: UserData = {

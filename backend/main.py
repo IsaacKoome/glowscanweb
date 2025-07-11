@@ -386,46 +386,84 @@ async def create_paystack_payment(request: Request, x_user_id: str = Header(...,
         raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
 
     
-
 @app.post("/cancel-subscription")
-async def cancel_subscription(x_user_id: str = Header(..., alias="X-User-ID")):
+async def cancel_subscription(request: Request): # Changed to async def
+    user_id = request.headers.get("X-User-ID")
+
+    if not user_id:
+        print("❌ Missing X-User-ID header") # Added logging
+        raise HTTPException(status_code=400, detail="Missing X-User-ID header")
+
+    print(f"🔍 Cancelling subscription for user: {user_id}")
+    
+    # Ensure Firestore is initialized
     if not db:
+        print("❌ Firestore client is not initialized.") # Added logging
         raise HTTPException(status_code=500, detail="Firestore not initialized.")
+    
+    # Fetch user doc
+    user_ref = db.collection("users").document(user_id)
+    doc = user_ref.get()
+
+    if not doc.exists:
+        print(f"❌ Firestore: No document found for user {user_id}.") # Added logging
+        raise HTTPException(status_code=404, detail="User not found in Firestore")
+
+    user_data = doc.to_dict()
+    subscription_code = user_data.get("paystackSubscriptionCode")
+
+    if not subscription_code:
+        print(f"❌ paystackSubscriptionCode missing in Firestore for user {user_id}: {user_data}") # Added logging
+        raise HTTPException(status_code=400, detail="No subscription code found for this user.")
+
+    # Ensure Paystack Secret Key is configured
     if not PAYSTACK_SECRET_KEY:
-        raise HTTPException(status_code=500, detail="Paystack not configured.")
+        print("❌ PAYSTACK_SECRET_KEY is not set for cancellation.") # Added logging
+        raise HTTPException(status_code=500, detail="Paystack secret key not configured for cancellation.")
 
+    # Now cancel using Paystack API
     try:
-        # Fetch user
-        user_ref = db.collection("users").document(x_user_id)
-        user_doc = user_ref.get()
-        user_data = user_doc.to_dict() if user_doc.exists else {}
-        subscription_code = user_data.get("paystackSubscriptionCode")
-
-        if not subscription_code:
-            raise HTTPException(status_code=400, detail="No active subscription found.")
-
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                f"{PAYSTACK_API_BASE_URL}/subscription/disable",
+        async with httpx.AsyncClient() as client: # Use httpx.AsyncClient for async
+            print(f"🚀 Attempting to disable subscription {subscription_code} via Paystack API.") # Added logging
+            response = await client.post( # Use await with client.post
+                "https://api.paystack.co/subscription/disable",
                 headers={
                     "Authorization": f"Bearer {PAYSTACK_SECRET_KEY}",
                     "Content-Type": "application/json"
                 },
-                json={"code": subscription_code, "token": " "},  # Token field required by Paystack
+                json={
+                    "code": subscription_code,
+                    # "token": "access"   # This 'token' field is typically not required for disabling a subscription.
+                                        # It's more for enabling or managing specific authorization tokens.
+                                        # Removing it to align with standard Paystack disable API usage.
+                }
             )
-            response.raise_for_status()
+            response.raise_for_status() # Raise for bad status codes (4xx or 5xx)
+            paystack_response_data = response.json()
+            print(f"✅ Paystack disable response: {paystack_response_data}") # Added logging
 
-        # Downgrade user immediately
-        user_ref.set({
+        # Update user's plan in Firestore
+        user_ref.update({
             "subscriptionPlan": "free",
-            "paystackSubscriptionStatus": "disabled"
-        }, merge=True)
+            "paystackSubscriptionStatus": "disabled", # Changed to 'disabled' to match Paystack's status
+            "paystackSubscriptionCode": firestore.DELETE # Optionally remove the code after disabling
+        })
 
-        return {"status": "cancelled"}
+        print(f"✅ Subscription for user {user_id} cancelled successfully and Firestore updated.")
+        return {"status": "success", "message": "Subscription cancelled and user downgraded to Free."}
 
+    except httpx.HTTPStatusError as e:
+        print(f"❌ Paystack API error during cancellation for user {user_id}: {e.response.status_code} - {e.response.text}")
+        try:
+            error_detail = e.response.json().get('message', 'Unknown error from Paystack.')
+        except json.JSONDecodeError:
+            error_detail = e.response.text
+        raise HTTPException(status_code=e.response.status_code, detail=f"Failed to cancel subscription on Paystack: {error_detail}")
     except Exception as e:
-        print(f"Error cancelling subscription: {e}")
-        raise HTTPException(status_code=500, detail="Cancellation failed.")
+        print(f"❌ Unexpected error cancelling subscription for {user_id}: {e}")
+        import traceback
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail="An unexpected error occurred during cancellation.")
 
 
 # NEW ENDPOINT: Paystack Webhook Handler
@@ -500,8 +538,9 @@ async def paystack_webhook(request: Request): # Removed raw_body parameter
         customer_code = subscription_data.get('customer', {}).get('customer_code')
         subscription_status = subscription_data.get('status')
         plan_code = subscription_data.get('plan', {}).get('plan_code')
+        subscription_code = subscription_data.get('subscription_code') # Extract subscription_code
 
-        print(f"Paystack subscription event: {event_type} for customer: {customer_code}, status: {subscription_status}, plan: {plan_code}")
+        print(f"Paystack subscription event: {event_type} for customer: {customer_code}, status: {subscription_status}, plan: {plan_code}, subscription_code: {subscription_code}")
 
         if customer_code and db:
             users_ref = db.collection("users")
@@ -523,7 +562,7 @@ async def paystack_webhook(request: Request): # Removed raw_body parameter
                     user_doc.reference.set({
                         "subscriptionPlan": new_plan_id,
                         "paystackSubscriptionStatus": subscription_status,
-                        "paystackSubscriptionCode": subscription_data.get('subscription_code'),
+                        "paystackSubscriptionCode": subscription_code, # <-- ADDED THIS LINE
                         "lastAnalysisDate": date.today().isoformat(),
                         "geminiCountToday": 0,
                         "gpt4oCountToday": 0,
