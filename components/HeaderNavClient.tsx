@@ -17,12 +17,7 @@ export default function HeaderNavClient() {
     <div className="flex flex-col sm:flex-row items-center space-x-0 sm:space-x-6 w-full sm:w-auto">
       {/* Navigation Links */}
       <nav className="flex space-x-6 mb-2 sm:mb-0"> {/* Added mb-2 for spacing on mobile */}
-        <Link href="/" 
-        className="text-white text-lg font-semibold hover:text-pink-200 transition-colors">Home
-        </Link>
-        <Link href="/upload" 
-        className="text-white text-lg font-semibold hover:text-pink-200 transition-colors">Upload
-        </Link>
+        
         <Link href="/tips"
           className="text-white text-lg font-semibold hover:text-pink-200 transition-colors">Tips
         </Link>

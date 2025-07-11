@@ -298,6 +298,15 @@ export default function HomePage() {
           <Link href="/pricing" className="inline-flex items-center justify-center bg-green-100 text-green-700 font-bold py-3 px-8 rounded-full text-xl shadow-md transition duration-300 ease-in-out hover:bg-green-200">
             View Plans & Pricing 💰
           </Link>
+            <p>
+              💌 Need help or want to get in touch? 
+              <a
+                href="mailto:koomeisaac16@gmail.com.com"
+                className="text-purple-600 hover:underline font-medium ml-1"
+              >
+                Contact us
+              </a>
+            </p>
         </div>
       </div>
 
