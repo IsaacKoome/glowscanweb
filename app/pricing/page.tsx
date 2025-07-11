@@ -21,7 +21,7 @@ const plans: Plan[] = [
     price: '$0',
     priceDetails: 'per month',
     features: [
-      '3 analyses per day (Gemini Flash)',
+      '3 analyses per day (Fast AI Model)', // Updated
       'Basic skin & makeup insights',
       'Access to community tips',
       'No credit card required'
@@ -32,11 +32,11 @@ const plans: Plan[] = [
   {
     id: 'basic',
     name: 'Basic Plan',
-    price: 'KES 700',
+    price: '$5', // Updated to USD
     priceDetails: 'per month',
     features: [
-      '3 analyses/day (GPT-4o)',
-      '10 analyses/day (Gemini Flash)',
+      '3 analyses per day (Our Best AI Model)', // Updated
+      '10 analyses per day (Fast AI Model)', // Updated
       'Advanced skin & makeup insights',
       'Priority email support',
       'Ad-free experience'
@@ -47,11 +47,11 @@ const plans: Plan[] = [
   {
     id: 'standard',
     name: 'Standard Plan',
-    price: 'KES 2,800',
+    price: '$20', // Updated to USD
     priceDetails: 'per month',
     features: [
-      '10 analyses/day (GPT-4o)',
-      'Unlimited analyses (Gemini Flash)',
+      '10 analyses per day (Our Best AI Model)', // Updated
+      'Unlimited analyses (Fast AI Model)', // Updated
       'Detailed personalized reports',
       'Dedicated chat support',
       'Early access to new features'
@@ -63,11 +63,11 @@ const plans: Plan[] = [
   {
     id: 'premium',
     name: 'Premium Plan',
-    price: 'KES 14,000',
+    price: '$100', // Updated to USD
     priceDetails: 'per month',
     features: [
-      'Unlimited analyses (GPT-4o)',
-      'Unlimited analyses (Gemini Flash)',
+      'Unlimited analyses from our best model', // Updated for consistency
+      'Unlimited analyses (Fast AI Model)', // Updated
       'Exclusive expert webinars',
       '24/7 priority support',
       'Personalized beauty consultations'
