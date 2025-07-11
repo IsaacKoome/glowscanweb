@@ -150,11 +150,13 @@ export default function HomePage() {
       }
 
       try {
+        // More flexible constraints for desktop compatibility
         const constraints: MediaStreamConstraints = {
           video: {
-            facingMode: 'user',
-            width: { ideal: 1920 }, // Try Full HD width
-            height: { ideal: 1080 } // Try Full HD height
+            facingMode: 'user', // Front camera for selfies
+            // Use ideal for preferred resolution, but allow browser to pick lower if needed
+            width: { ideal: 1280, min: 640 }, // Try 720p, accept down to 480p width
+            height: { ideal: 720, min: 480 } // Try 720p, accept down to 480p height
           }
         };
 
@@ -162,17 +164,27 @@ export default function HomePage() {
         stream = await navigator.mediaDevices.getUserMedia(constraints);
         console.log("Camera stream obtained:", stream);
 
+        // Log actual track settings
+        if (stream.getVideoTracks().length > 0) {
+          const track = stream.getVideoTracks()[0];
+          const settings = track.getSettings();
+          console.log("Camera Track Settings:", settings);
+        }
+
         videoRef.current.srcObject = stream;
         
-        videoRef.current.oncanplay = async () => {
-          console.log("Video is ready to play (oncanplay event).");
+        // Use onloadeddata for a more reliable indication that video dimensions are available
+        videoRef.current.onloadeddata = async () => {
+          console.log("Video data loaded (onloadeddata event).");
+          // Log actual video element dimensions after metadata is loaded
+          console.log(`Video element dimensions: ${videoRef.current?.videoWidth}x${videoRef.current?.videoHeight}`);
           try {
             await videoRef.current?.play();
             console.log("Video playback initiated successfully.");
             setCameraStatus('playing');
             setIsStreamingAnalysis(true);
           } catch (playErr: any) {
-            console.error("Error playing video stream after oncanplay:", playErr);
+            console.error("Error playing video stream after onloadeddata:", playErr);
             setCameraStatus('error');
             setError(`Failed to play camera stream: ${playErr.message || playErr.name}. Is camera in use or permissions denied?`);
             setShowCamera(false);
@@ -186,9 +198,11 @@ export default function HomePage() {
           setShowCamera(false);
         };
 
-        videoRef.current.onloadedmetadata = () => {
-          console.log("Video metadata loaded (onloadedmetadata event).");
-        };
+        // Removed videoRef.current.oncanplay and onloadedmetadata as onloadeddata covers this
+        // videoRef.current.onloadedmetadata = () => {
+        //   console.log("Video metadata loaded (onloadedmetadata event).");
+        //   console.log(`Video metadata dimensions: ${videoRef.current?.videoWidth}x${videoRef.current?.videoHeight}`);
+        // };
 
         videoRef.current.load();
 
@@ -320,7 +334,8 @@ export default function HomePage() {
             {/* Left Column: Camera Feed & Controls */}
             <div className="flex flex-col flex-1">
               <h2 className="text-2xl font-bold mb-4 text-center text-purple-700">Live Camera Mirror 🤳</h2>
-              <div className="relative w-full aspect-video bg-gray-800 rounded-xl overflow-hidden flex-grow flex items-center justify-center">
+              {/* Added max-w-full and max-h-full to ensure video container respects modal size */}
+              <div className="relative w-full aspect-video bg-gray-800 rounded-xl overflow-hidden flex-grow flex items-center justify-center max-w-full max-h-full">
                 {/* Conditionally render loading spinner or error message */}
                 {cameraStatus === 'loading' && (
                   <div className="absolute inset-0 flex items-center justify-center bg-gray-900 text-white text-xl flex-col">
@@ -384,7 +399,7 @@ export default function HomePage() {
 
             {/* Right Column: Live Analysis Insights */}
             {isStreamingAnalysis && (
-              <div className="flex flex-col flex-1 bg-purple-50 rounded-xl shadow-inner text-purple-800 p-4 overflow-y-auto">
+              <div className="flex flex-col flex-1 bg-purple-50 rounded-xl shadow-inner text-purple-800 p-4 overflow-y-auto flex-shrink-0"> {/* Added flex-shrink-0 */}
                 <h3 className="text-lg font-semibold mb-1 text-center">Live Skin Insights</h3>
                 {liveResult ? (
                   <AnalysisResult result={liveResult} />

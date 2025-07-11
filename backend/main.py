@@ -79,7 +79,7 @@ except Exception as e:
 # Define subscription plans and their details for Paystack - UPDATED WITH YOUR NEW PLAN CODES
 SUBSCRIPTION_PLANS = {
     "free": {
-        "gemini_quota": 500, # TEMPORARILY INCREASED FOR TESTING
+        "gemini_quota": 500, # This will be overridden in /predict for now
         "gpt4o_quota": 0,
         "model_preference": "gemini",
         "amount_kes_cents": 0,
@@ -112,6 +112,9 @@ SUBSCRIPTION_PLANS = {
     },
 }
 
+# Removed FREE_GEMINI_LAUNCH_END_DATE as Gemini will be unlimited for all for now.
+
+
 # ✅ 5. Test route
 @app.get("/")
 def root():
@@ -129,6 +132,7 @@ async def predict(
         print("ERROR: Firestore client is not initialized. Cannot manage quotas.")
         raise HTTPException(status_code=500, detail="Firestore not initialized. Cannot manage quotas.")
     
+    # We still fetch user data for logging/future use, but it won't impact model selection for now
     user_data = {}
     try:
         user_ref = db.collection("users").document(x_user_id)
@@ -139,49 +143,26 @@ async def predict(
         print(f"ERROR: Failed to fetch user data from Firestore for {x_user_id}: {e}")
         import traceback
         print(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=f"Failed to retrieve user data: {str(e)}")
+        # Do not raise HTTPException here, allow prediction to proceed with Gemini
+        # raise HTTPException(status_code=500, detail=f"Failed to retrieve user data: {str(e)}")
     
-    current_plan = user_data.get("subscriptionPlan", "free")
-    last_analysis_date_str = user_data.get("lastAnalysisDate")
-    gemini_count_today = user_data.get("geminiCountToday", 0)
-    gpt4o_count_today = user_data.get("gpt4oCountToday", 0)
+    current_plan = user_data.get("subscriptionPlan", "free") # Keep track of current plan for logging
 
-    today_str = date.today().isoformat()
-
-    if last_analysis_date_str != today_str:
-        gemini_count_today = 0
-        gpt4o_count_today = 0
-        print(f"Daily quotas reset for user {x_user_id}.")
-
-    plan_quotas = SUBSCRIPTION_PLANS.get(current_plan, SUBSCRIPTION_PLANS["free"])
-    
-    model_to_use = ""
-    if plan_quotas["model_preference"] == "gpt4o" and openai_client:
-        if plan_quotas["gpt4o_quota"] == -1 or gpt4o_count_today < plan_quotas["gpt4o_quota"]:
-            model_to_use = "gpt4o"
-        elif plan_quotas["gemini_quota"] == -1 or gemini_count_today < plan_quotas["gemini_quota"]:
-            model_to_use = "gemini"
-        else:
-            raise HTTPException(status_code=429, detail="Daily quota exceeded for all available models.")
-    else:
-        if plan_quotas["gemini_quota"] == -1 or gemini_count_today < plan_quotas["gemini_quota"]:
-            model_to_use = "gemini"
-        elif openai_client and (plan_quotas["gpt4o_quota"] == -1 or gpt4o_count_today < plan_quotas["gpt4o_quota"]):
-             model_to_use = "gpt4o"
-        else:
-            raise HTTPException(status_code=429, detail="Daily quota exceeded for all available models.")
-
-    print(f"User {x_user_id} (Plan: {current_plan}) will use model: {model_to_use}")
+    # --- NEW LOGIC: Force Gemini Flash for all users, unlimited ---
+    model_to_use = "gemini"
+    print(f"User {x_user_id} (Plan: {current_plan}). Forcing unlimited Gemini Flash analysis.")
+    # No quota checks or OpenAI calls for now, directly proceed with Gemini
+    # --- END NEW LOGIC ---
 
     try:
         image_bytes = await file.read()
         
-        if model_to_use == "gemini":
-            gemini_image_part = {
-                "mime_type": file.content_type,
-                "data": image_bytes
-            }
-            prompt = """
+        # Always use Gemini for analysis
+        gemini_image_part = {
+            "mime_type": file.content_type,
+            "data": image_bytes
+        }
+        prompt = """
 You are a highly experienced, friendly, and encouraging AI skincare and makeup expert named WonderJoy AI. Your goal is to provide precise, actionable, and personalized feedback based on the user's selfie.
 
 Analyze the attached selfie for both skin health and makeup application. Provide your analysis as a JSON object with the following keys. Each field should contain concise, direct advice or observations.
@@ -207,71 +188,14 @@ Crucial Instructions:
 3.  If no makeup is detected, state "no makeup detected" for relevant fields and provide general makeup enhancement tips.
 4.  For `skincare_advice_tips` and `makeup_enhancement_tips`, provide concise, actionable sentences.
 """
-            generation_config = {
-                "response_mime_type": "application/json"
-            }
-            response = gemini_model.generate_content(
-                contents=[prompt, gemini_image_part],
-                generation_config=generation_config
-            )
-            raw_response_text = response.text
-
-        elif model_to_use == "gpt4o":
-            if not openai_client:
-                raise HTTPException(status_code=500, detail="OpenAI client not initialized. API Key missing.")
-
-            buffered = BytesIO(image_bytes)
-            img = Image.open(buffered)
-            if img.mode != 'RGB':
-                img = img.convert('RGB')
-            
-            img_byte_arr = BytesIO()
-            img.save(img_byte_arr, format='JPEG')
-            base64_image = base64.b64encode(img_byte_arr.getvalue()).decode('utf-8')
-
-            gpt_prompt = """
-You are a highly experienced, friendly, and encouraging AI skincare and makeup expert named WonderJoy AI. Analyze the attached selfie and provide a JSON object with the following keys, offering precise, actionable, and personalized feedback.
-
-Expected JSON Structure:
-{
-  "hydration": "...",
-  "acne": "...",
-  "redness": "...",
-  "skin_tone": "...",
-  "makeup_coverage": "...",
-  "makeup_blend": "...",
-  "makeup_color_match": "...",
-  "overall_glow_score": number,
-  "skincare_advice_tips": [],
-  "makeup_enhancement_tips": [],
-  "overall_summary": "..."
-}
-
-Crucial Instructions:
-1.  **Output ONLY the JSON object.** Do not include any conversational text, markdown outside the JSON, or explanations before or after the JSON.
-2.  Be as specific as possible in `makeup_blend` and `makeup_color_match` feedback, noting *where* improvements are needed (e.g., "blend more around the nose," "foundation appears slightly too warm for your neck").
-3.  If no makeup is detected, state "no makeup detected" for relevant fields and provide general makeup enhancement tips.
-4.  For `skincare_advice_tips` and `makeup_enhancement_tips`, provide concise, actionable sentences.
-"""
-            
-            chat_completion = await openai_client.chat.completions.create(
-                model="gpt-4o",
-                messages=[
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": gpt_prompt},
-                            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
-                        ]
-                    }
-                ],
-                response_format={"type": "json_object"},
-                max_tokens=1000,
-            )
-            raw_response_text = chat_completion.choices[0].message.content
-
-        else:
-            raise HTTPException(status_code=500, detail="No valid AI model selected or available.")
+        generation_config = {
+            "response_mime_type": "application/json"
+        }
+        response = gemini_model.generate_content(
+            contents=[prompt, gemini_image_part],
+            generation_config=generation_config
+        )
+        raw_response_text = response.text
 
         if raw_response_text:
             try:
@@ -291,23 +215,21 @@ Crucial Instructions:
             print("AI response text is empty.")
             raise HTTPException(status_code=500, detail="AI returned an empty response.")
 
+        # Quota update logic is temporarily skipped for Gemini for now
+        # You might still want to log usage for analytics, but not enforce limits.
+        # For now, we'll just update the last analysis date.
         try:
-            if model_to_use == "gemini":
-                gemini_count_today += 1
-            elif model_to_use == "gpt4o":
-                gpt4o_count_today += 1
-
+            today_str = date.today().isoformat()
             user_ref.set({
-                "subscriptionPlan": current_plan,
                 "lastAnalysisDate": today_str,
-                "geminiCountToday": gemini_count_today,
-                "gpt4oCountToday": gpt4o_count_today
+                # Not updating geminiCountToday or gpt4oCountToday for now to ensure unlimited
             }, merge=True)
-            print(f"Quota updated successfully for user {x_user_id}.")
+            print(f"Last analysis date updated for user {x_user_id}.")
         except Exception as e:
-            print(f"ERROR: Failed to update user quota in Firestore for {x_user_id}: {e}")
+            print(f"ERROR: Failed to update last analysis date in Firestore for {x_user_id}: {e}")
             import traceback
             print(traceback.format_exc())
+
 
         return result
 
@@ -316,73 +238,6 @@ Crucial Instructions:
     except Exception as e:
         import traceback
         print(f"Error in backend /predict: {e}\n{traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
-
-# NEW ENDPOINT: Create Paystack Payment Initiation
-@app.post("/create-paystack-payment")
-async def create_paystack_payment(request: Request, x_user_id: str = Header(..., alias="X-User-ID")):
-    data = await request.json()
-    plan_id = data.get("planId")
-    user_email = data.get("userEmail", f"{x_user_id}@wonderjoy.ai") # Default email for unauth users
-    
-    if not plan_id:
-        raise HTTPException(status_code=400, detail="Plan ID is required.")
-
-    plan_info = SUBSCRIPTION_PLANS.get(plan_id)
-    if not plan_info or plan_info["amount_kes_cents"] == 0:
-        raise HTTPException(status_code=404, detail="Invalid plan ID or free plan selected.")
-
-    if not PAYSTACK_SECRET_KEY:
-        raise HTTPException(status_code=500, detail="Paystack secret key not configured on backend.")
-
-    # Generate a unique transaction reference
-    tx_ref = f"WJA-{x_user_id}-{plan_id}-{datetime.now().timestamp()}"
-
-    # Prepare data for Paystack transaction initialization
-    amount_in_cents = plan_info["amount_kes_cents"]
-
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                f"{PAYSTACK_API_BASE_URL}/transaction/initialize",
-                headers={
-                    "Authorization": f"Bearer {PAYSTACK_SECRET_KEY}",
-                    "Content-Type": "application/json"
-                },
-                json={
-                    "email": user_email,
-                    "amount": amount_in_cents, # Paystack expects amount in kobo/cents
-                    "currency": plan_info["currency"],
-                    "reference": tx_ref,
-                    "plan": plan_info["paystack_plan_code"], # Link to the subscription plan
-                    "metadata": {
-                        "userId": x_user_id,
-                        "planId": plan_id
-                    },
-                    "callback_url": f"https://www.wonderjoyai.com/payment-status?tx_ref={tx_ref}&status=callback&planId={plan_id}&userId={x_user_id}"
-                }
-            )
-            response.raise_for_status() # Raise an exception for HTTP errors (4xx or 5xx)
-            
-            paystack_response = response.json()
-
-            if paystack_response and paystack_response.get("status"):
-                return {"checkout_url": paystack_response["data"]["authorization_url"]}
-            else:
-                print(f"Paystack initiation failed: {paystack_response}")
-                raise HTTPException(status_code=500, detail=f"Paystack initiation failed: {paystack_response.get('message', 'Unknown error')}")
-
-    except httpx.HTTPStatusError as e:
-        print(f"HTTP error from Paystack: {e.response.text}")
-        try:
-            error_detail = e.response.json().get('message', 'Unknown HTTP error from Paystack.')
-        except json.JSONDecodeError:
-            error_detail = e.response.text
-        raise HTTPException(status_code=500, detail=f"Paystack API error: {error_detail}")
-    except Exception as e:
-        print(f"Error creating Paystack payment: {e}")
-        import traceback
-        print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
 
     
@@ -442,7 +297,7 @@ async def cancel_subscription(request: Request): # Changed to async def
             paystack_response_data = response.json()
             print(f"✅ Paystack disable response: {paystack_response_data}") # Added logging
 
-        # Update user's plan in Firestore
+        # Update user's plan to free in Firestore
         user_ref.update({
             "subscriptionPlan": "free",
             "paystackSubscriptionStatus": "disabled", # Changed to 'disabled' to match Paystack's status
@@ -536,11 +391,12 @@ async def paystack_webhook(request: Request): # Removed raw_body parameter
     elif event_type == 'subscription.create' or event_type == 'subscription.not_renew' or event_type == 'subscription.disable':
         subscription_data = event['data']
         customer_code = subscription_data.get('customer', {}).get('customer_code')
-        subscription_status = subscription_data.get('status')
+        # Correctly extract subscription_status and subscription_code directly from subscription_data
+        subscription_status_from_webhook = subscription_data.get('status')
+        subscription_code_from_webhook = subscription_data.get('subscription_code')
         plan_code = subscription_data.get('plan', {}).get('plan_code')
-        subscription_code_from_webhook = subscription_data.get('subscription_code') # Renamed for clarity
-
-        print(f"Paystack subscription event: {event_type} for customer: {customer_code}, status: {subscription_status}, plan: {plan_code}, subscription_code_from_webhook: {subscription_code_from_webhook}")
+        
+        print(f"Paystack subscription event: {event_type} for customer: {customer_code}, status: {subscription_status_from_webhook}, plan: {plan_code}, subscription_code: {subscription_code_from_webhook}")
         print(f"Full subscription_data from webhook: {json.dumps(subscription_data, indent=2)}") # Added for full payload inspection
 
         if customer_code and db:
@@ -554,26 +410,28 @@ async def paystack_webhook(request: Request): # Removed raw_body parameter
                     user_id = user_doc.id
                     
                     new_plan_id = "free"
-                    if subscription_status != 'disabled':
+                    if subscription_status_from_webhook != 'disabled': # Use the extracted status
                         for p_id, p_info in SUBSCRIPTION_PLANS.items():
                             if p_info.get("paystack_plan_code") == plan_code:
                                 new_plan_id = p_id
                                 break
                     
-                    user_doc.reference.set({
+                    # --- CRITICAL FIX: Ensure these fields are explicitly saved ---
+                    update_data = {
                         "subscriptionPlan": new_plan_id,
-                        "paystackSubscriptionStatus": subscription_status,
-                        "paystackSubscriptionCode": subscription_code_from_webhook, # <-- Using the extracted code
+                        "paystackSubscriptionStatus": subscription_status_from_webhook, # Using the extracted status
+                        "paystackSubscriptionCode": subscription_code_from_webhook,     # Using the extracted code
                         "lastAnalysisDate": date.today().isoformat(),
                         "geminiCountToday": 0,
                         "gpt4oCountToday": 0,
-                    }, merge=True)
-                    print(f"User {user_id} subscription status updated to {subscription_status} and plan to {new_plan_id} in Firestore via webhook.")
-                    print(f"Firestore update for user {user_id}: paystackSubscriptionCode={subscription_code_from_webhook}, paystackSubscriptionStatus={subscription_status}") # Confirming update
+                    }
+                    user_doc.reference.set(update_data, merge=True)
+                    print(f"User {user_id} subscription status updated to {subscription_status_from_webhook} and plan to {new_plan_id} in Firestore via webhook.")
+                    print(f"Firestore update for user {user_id}: {json.dumps(update_data, indent=2)}") # Confirming update with full data
                 else:
                     print(f"WARNING: User not found in Firestore for Paystack customer code: {customer_code}")
             except Exception as e:
-                print(f"ERROR: Failed to handle subscription event for customer {customer_code}: {e}")
+                print(f"ERROR: Failed to handle subscription event for customer {customer_code} and update Firestore: {e}")
                 import traceback
                 print(traceback.format_exc())
         else:
