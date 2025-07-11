@@ -298,29 +298,21 @@ export default function HomePage() {
           <Link href="/pricing" className="inline-flex items-center justify-center bg-green-100 text-green-700 font-bold py-3 px-8 rounded-full text-xl shadow-md transition duration-300 ease-in-out hover:bg-green-200">
             View Plans & Pricing 💰
           </Link>
-            {/* NEW: Early Stage Development Message */}
+        </div>
+      </div>
+
+      {/* NEW: Early Stage Development Message */}
       <div className="mt-16 max-w-3xl mx-auto bg-yellow-50 border border-yellow-200 rounded-2xl shadow-lg p-6 text-center text-yellow-800">
         <h2 className="text-2xl font-bold mb-3">We're Just Getting Started! 🌱</h2>
         <p className="text-lg mb-4">
           WonderJoy AI is in its early development phase. We're constantly working to refine our analysis, add exciting new features, and squash any bugs you might encounter. Your experience helps us grow!
         </p>
         <p className="text-lg mb-6">
-          If you love what we're building and want to help shape the future of beauty tech, consider becoming an early supporter or sharing your valuable feedback.
+          If you love what we're building and want to help shape the future of beauty tech, consider becoming an early adopter or sharing your valuable feedback.
         </p>
-        <Link href="/support-us" className="inline-flex items-center justify-center bg-yellow-500 text-white font-bold py-3 px-8 rounded-full text-lg shadow-md transition duration-300 ease-in-out hover:bg-yellow-600 focus:outline-none focus:ring-4 focus:ring-yellow-300">
-          How You Can Support Us ❤️
+        <Link href="mailto:koomeisaac16@gmail.com" className="inline-flex items-center justify-center bg-yellow-500 text-white font-bold py-3 px-8 rounded-full text-lg shadow-md transition duration-300 ease-in-out hover:bg-yellow-600 focus:outline-none focus:ring-4 focus:ring-yellow-300">
+          Reach Us ❤️
         </Link>
-      </div>
-            <p>
-              💌 Need help or want to get in touch? 
-              <a
-                href="mailto:koomeisaac16@gmail.com.com"
-                className="text-purple-600 hover:underline font-medium ml-1"
-              >
-                Contact us
-              </a>
-            </p>
-        </div>
       </div>
 
       {/* Camera Modal */}
