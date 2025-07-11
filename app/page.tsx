@@ -198,12 +198,6 @@ export default function HomePage() {
           setShowCamera(false);
         };
 
-        // Removed videoRef.current.oncanplay and onloadedmetadata as onloadeddata covers this
-        // videoRef.current.onloadedmetadata = () => {
-        //   console.log("Video metadata loaded (onloadedmetadata event).");
-        //   console.log(`Video metadata dimensions: ${videoRef.current?.videoWidth}x${videoRef.current?.videoHeight}`);
-        // };
-
         videoRef.current.load();
 
       } catch (err: any) {
@@ -276,54 +270,35 @@ export default function HomePage() {
   return (
     <div className="flex flex-col items-center justify-center min-h-[calc(100vh-128px)] bg-gradient-to-br from-pink-50 via-purple-50 to-blue-50 p-6 text-center">
       <div className="max-w-3xl mx-auto py-12 px-6 bg-white rounded-3xl shadow-xl border border-gray-100 transform transition duration-500 hover:scale-105 relative">
-        {/* Login/Logout Button is now in RootLayout */}
-
         <h1 className="text-5xl font-extrabold text-purple-800 mb-6 leading-tight">
           Your Daily Beauty Mirror, Powered by AI ✨
         </h1>
         <p className="text-xl text-gray-700 mb-8 max-w-2xl mx-auto">
-          Uncover the secrets to radiant skin and flawless makeup with WonderJoy AI. Your personal beauty companion, right in your pocket.
+          Uncover the secrets to radiant skin and flawless makeup with WonderJoy AI. Get instant, personalized analysis directly from your camera.
         </p>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
-          <button
-            onClick={() => setShowCamera(true)}
-            className="p-6 bg-pink-50 rounded-2xl shadow-md border border-pink-100 hover:shadow-lg transform transition duration-300 hover:-translate-y-1 text-left cursor-pointer"
-          >
-            <h2 className="text-3xl font-bold text-pink-600 mb-3">
-              Real-time Skin Analysis 🔬
-            </h2>
-            <p className="text-gray-700">
-              Just open your camera and let our AI instantly analyze your skin's health, hydration, and more.
-            </p>
-          </button>
+        {/* Primary CTA: Open Camera */}
+        <button
+          onClick={() => setShowCamera(true)}
+          className="inline-flex items-center justify-center bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold py-5 px-12 rounded-full text-3xl shadow-xl transition duration-300 ease-in-out transform hover:scale-105 hover:shadow-2xl focus:outline-none focus:ring-4 focus:ring-purple-400 mb-6"
+        >
+          Open My Beauty Mirror 📸
+        </button>
+        <p className="text-lg text-gray-600 mb-8">
+          Start your real-time skin and makeup analysis instantly.
+        </p>
 
-          <button
-            onClick={() => setShowCamera(true)}
-            className="p-6 bg-blue-50 rounded-2xl shadow-md border border-blue-100 hover:shadow-lg transform transition duration-300 hover:-translate-y-1 text-left cursor-pointer"
-          >
-            <h2 className="text-3xl font-bold text-blue-600 mb-3">
-              Makeup Perfection Guide 💄
-            </h2>
-            <p className="text-gray-700">
-              Get personalized feedback on your makeup application – from foundation blend to lipstick shade!
-            </p>
-          </button>
-        </div>
-
-        {/* Flex container for the two bottom buttons */}
+        {/* Secondary CTAs */}
         <div className="flex flex-col sm:flex-row justify-center gap-4 mt-8">
-          <Link href="/upload" className="inline-flex items-center justify-center bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold py-4 px-10 rounded-full text-2xl shadow-lg transition duration-300 ease-in-out transform hover:scale-105 hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-purple-300">
+          <Link href="/upload" className="inline-flex items-center justify-center bg-gray-200 text-gray-800 font-bold py-3 px-8 rounded-full text-xl shadow-md transition duration-300 ease-in-out hover:bg-gray-300">
             Upload Image from Files 📂
           </Link>
 
-          {/* NEW: Button to Pricing Page */}
-          <Link href="/pricing" className="inline-flex items-center justify-center bg-gradient-to-r from-green-500 to-teal-500 text-white font-bold py-4 px-10 rounded-full text-2xl shadow-lg transition duration-300 ease-in-out transform hover:scale-105 hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-green-300">
+          {/* Button to Pricing Page */}
+          <Link href="/pricing" className="inline-flex items-center justify-center bg-green-100 text-green-700 font-bold py-3 px-8 rounded-full text-xl shadow-md transition duration-300 ease-in-out hover:bg-green-200">
             View Plans & Pricing 💰
           </Link>
         </div>
-
-        {/* The "View My Profile" button is now in the HeaderNavClient, so it's removed from here. */}
       </div>
 
       {/* Camera Modal */}
