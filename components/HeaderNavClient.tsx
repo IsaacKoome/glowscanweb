@@ -33,9 +33,11 @@ export default function HeaderNavClient() {
           className="text-white text-lg font-semibold hover:text-pink-200 transition-colors">Profile 👤
           </Link>
         )}
+        {/* Billing Link - Styled to match other navigation links */}
+        <Link href="/billing" className="text-white text-lg font-semibold hover:text-pink-200 transition-colors">
+          Billing
+        </Link>
       </nav>
-      <Link href="/billing" className="hover:underline text-purple-600">Billing</Link>
-
 
       {/* Auth Button - pushed to the far right within this flex container */}
       <div className="ml-0 sm:ml-auto"> {/* ml-auto on sm screens to push right, ml-0 on mobile */}
@@ -59,4 +61,3 @@ export default function HeaderNavClient() {
     </div>
   );
 }
-

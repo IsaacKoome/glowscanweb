@@ -538,9 +538,10 @@ async def paystack_webhook(request: Request): # Removed raw_body parameter
         customer_code = subscription_data.get('customer', {}).get('customer_code')
         subscription_status = subscription_data.get('status')
         plan_code = subscription_data.get('plan', {}).get('plan_code')
-        subscription_code = subscription_data.get('subscription_code') # Extract subscription_code
+        subscription_code_from_webhook = subscription_data.get('subscription_code') # Renamed for clarity
 
-        print(f"Paystack subscription event: {event_type} for customer: {customer_code}, status: {subscription_status}, plan: {plan_code}, subscription_code: {subscription_code}")
+        print(f"Paystack subscription event: {event_type} for customer: {customer_code}, status: {subscription_status}, plan: {plan_code}, subscription_code_from_webhook: {subscription_code_from_webhook}")
+        print(f"Full subscription_data from webhook: {json.dumps(subscription_data, indent=2)}") # Added for full payload inspection
 
         if customer_code and db:
             users_ref = db.collection("users")
@@ -562,12 +563,13 @@ async def paystack_webhook(request: Request): # Removed raw_body parameter
                     user_doc.reference.set({
                         "subscriptionPlan": new_plan_id,
                         "paystackSubscriptionStatus": subscription_status,
-                        "paystackSubscriptionCode": subscription_code, # <-- ADDED THIS LINE
+                        "paystackSubscriptionCode": subscription_code_from_webhook, # <-- Using the extracted code
                         "lastAnalysisDate": date.today().isoformat(),
                         "geminiCountToday": 0,
                         "gpt4oCountToday": 0,
                     }, merge=True)
                     print(f"User {user_id} subscription status updated to {subscription_status} and plan to {new_plan_id} in Firestore via webhook.")
+                    print(f"Firestore update for user {user_id}: paystackSubscriptionCode={subscription_code_from_webhook}, paystackSubscriptionStatus={subscription_status}") # Confirming update
                 else:
                     print(f"WARNING: User not found in Firestore for Paystack customer code: {customer_code}")
             except Exception as e:
