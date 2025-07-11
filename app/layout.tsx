@@ -26,6 +26,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <main className="min-h-screen">
             {children}
           </main>
+          <p>
+    💌 Need help or want to get in touch? 
+    <a
+      href="mailto:admin@wonderjoyai.com"
+      className="text-purple-600 hover:underline font-medium ml-1"
+    >
+      Contact us
+    </a>
+  </p>
           <footer className="bg-gray-800 text-white p-6 text-center text-sm">
             <div className="max-w-7xl mx-auto">
               © {new Date().getFullYear()} WonderJoy AI. All rights reserved.
