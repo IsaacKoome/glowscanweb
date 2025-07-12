@@ -83,32 +83,32 @@ SUBSCRIPTION_PLANS = {
         "gpt4o_quota": 0,
         "model_preference": "gemini",
         "amount_kes_cents": 0,
-        "currency": "KES",
+        "currency": "USD",
         "paystack_plan_code": None
     },
     "basic": {
         "gemini_quota": 10,
         "gpt4o_quota": 3,
         "model_preference": "gpt4o",
-        "amount_kes_cents": 70000, # KES 700.00 -> 70000 cents
-        "currency": "KES",
-        "paystack_plan_code": "PLN_pb8k1oxtu8n3bh1" # YOUR ACTUAL BASIC PLAN CODE - UPDATED
+        "amount_cents": 5, # USD 5.00 -> 500 cents
+        "currency": "USD",
+        "paystack_plan_code": "PLN_s7gnbckddqplh9e" # YOUR ACTUAL BASIC PLAN CODE - UPDATED
     },
     "standard": {
         "gemini_quota": -1,
         "gpt4o_quota": 10,
         "model_preference": "gpt4o",
-        "amount_kes_cents": 280000, # KES 2800.00 -> 280000 cents
-        "currency": "KES",
-        "paystack_plan_code": "PLN_qc9ac75tvut6h0h" # YOUR ACTUAL STANDARD PLAN CODE - UPDATED
+        "amount_cents": 2000, # USD 20.00 -> 2000 cents
+        "currency": "USD",
+        "paystack_plan_code": "PLN_fv2x1v23kup2w0f" # YOUR ACTUAL STANDARD PLAN CODE - UPDATED
     },
     "premium": {
         "gemini_quota": -1,
         "gpt4o_quota": -1,
         "model_preference": "gpt4o",
-        "amount_kes_cents": 1400000, # KES 14000.00 -> 1400000 cents
-        "currency": "KES",
-        "paystack_plan_code": "PLN_x3g9ffyhjwjtv74" # YOUR ACTUAL PREMIUM PLAN CODE - UPDATED
+        "amount_cents": 10000, # USD 100.00 -> 10000 cents
+        "currency": "USD",
+        "paystack_plan_code": "PLN_ugyl1iiqo5vn4g3" # YOUR ACTUAL PREMIUM PLAN CODE - UPDATED
     },
 }
 
