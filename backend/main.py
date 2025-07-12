@@ -92,7 +92,7 @@ SUBSCRIPTION_PLANS = {
         "model_preference": "gpt4o",
         "amount_kes_cents": 70000, # KES 700.00 -> 70000 cents
         "currency": "KES",
-        "paystack_plan_code": "PLN_lrkikt1qz6r5mig" # YOUR ACTUAL BASIC PLAN CODE - UPDATED
+        "paystack_plan_code": "PLN_pb8k1oxtu8n3bh1" # YOUR ACTUAL BASIC PLAN CODE - UPDATED
     },
     "standard": {
         "gemini_quota": -1,
@@ -100,7 +100,7 @@ SUBSCRIPTION_PLANS = {
         "model_preference": "gpt4o",
         "amount_kes_cents": 280000, # KES 2800.00 -> 280000 cents
         "currency": "KES",
-        "paystack_plan_code": "PLN_9v76fs96u1us4o0" # YOUR ACTUAL STANDARD PLAN CODE - UPDATED
+        "paystack_plan_code": "PLN_qc9ac75tvut6h0h" # YOUR ACTUAL STANDARD PLAN CODE - UPDATED
     },
     "premium": {
         "gemini_quota": -1,
@@ -108,7 +108,7 @@ SUBSCRIPTION_PLANS = {
         "model_preference": "gpt4o",
         "amount_kes_cents": 1400000, # KES 14000.00 -> 1400000 cents
         "currency": "KES",
-        "paystack_plan_code": "PLN_smf4ocf5w0my58c" # YOUR ACTUAL PREMIUM PLAN CODE - UPDATED
+        "paystack_plan_code": "PLN_x3g9ffyhjwjtv74" # YOUR ACTUAL PREMIUM PLAN CODE - UPDATED
     },
 }
 
@@ -239,6 +239,88 @@ Crucial Instructions:
         import traceback
         print(f"Error in backend /predict: {e}\n{traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
+
+        # NEW ENDPOINT: Create Paystack Payment Initiation
+# This endpoint handles initiating payments with Paystack.
+# It receives the selected planId and userEmail from the frontend.
+# It communicates with Paystack to get a checkout URL and returns it to the frontend.
+@app.post("/create-paystack-payment")
+async def create_paystack_payment(request: Request, x_user_id: str = Header(..., alias="X-User-ID")):
+    data = await request.json()
+    plan_id = data.get("planId")
+    user_email = data.get("userEmail", f"{x_user_id}@wonderjoy.ai") # Default email for unauth users
+    
+    if not plan_id:
+        raise HTTPException(status_code=400, detail="Plan ID is required.")
+
+    plan_info = SUBSCRIPTION_PLANS.get(plan_id)
+    # Ensure the plan exists and is not the free plan (which doesn't require Paystack payment)
+    if not plan_info or plan_info["amount_kes_cents"] == 0:
+        raise HTTPException(status_code=404, detail="Invalid plan ID or free plan selected for payment.")
+
+    if not PAYSTACK_SECRET_KEY:
+        raise HTTPException(status_code=500, detail="Paystack secret key not configured on backend.")
+
+    # Generate a unique transaction reference
+    # This reference helps you track the transaction in Paystack and your system.
+    tx_ref = f"WJA-{x_user_id}-{plan_id}-{datetime.now().timestamp()}"
+
+    # Prepare data for Paystack transaction initialization
+    # Paystack expects amount in kobo (for NGN) or cents (for USD, KES, etc.)
+    amount_in_cents = plan_info["amount_kes_cents"] # Assuming this is correctly set for KES or USD cents
+
+    try:
+        async with httpx.AsyncClient() as client:
+            print(f"Initiating Paystack transaction for user {x_user_id}, plan {plan_id}...")
+            response = await client.post(
+                f"{PAYSTACK_API_BASE_URL}/transaction/initialize",
+                headers={
+                    "Authorization": f"Bearer {PAYSTACK_SECRET_KEY}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "email": user_email,
+                    "amount": amount_in_cents, # Amount in smallest currency unit (e.g., KES cents)
+                    "currency": plan_info["currency"], # Currency code (e.g., "KES", "USD")
+                    "reference": tx_ref,
+                    "plan": plan_info["paystack_plan_code"], # Link to the subscription plan
+                    "metadata": {
+                        "userId": x_user_id,
+                        "planId": plan_id
+                    },
+                    # The callback_url is where Paystack redirects the user after payment.
+                    # It's crucial for your frontend to handle this redirect and verify the payment.
+                    "callback_url": f"https://www.wonderjoyai.com/payment-status?tx_ref={tx_ref}&status=callback&planId={plan_id}&userId={x_user_id}"
+                }
+            )
+            response.raise_for_status() # Raise an exception for HTTP errors (4xx or 5xx)
+            
+            paystack_response = response.json()
+            print(f"Paystack initialization response: {json.dumps(paystack_response, indent=2)}")
+
+            if paystack_response and paystack_response.get("status"):
+                # Return the authorization_url (checkout URL) to the frontend
+                return {"checkout_url": paystack_response["data"]["authorization_url"]}
+            else:
+                # Log the full Paystack response if initiation failed
+                print(f"Paystack initiation failed (status false): {paystack_response}")
+                raise HTTPException(status_code=500, detail=f"Paystack initiation failed: {paystack_response.get('message', 'Unknown error')}")
+
+    except httpx.HTTPStatusError as e:
+        # Catch HTTP errors from Paystack API (e.g., 400 Bad Request, 401 Unauthorized)
+        print(f"HTTP error from Paystack: {e.response.status_code} - {e.response.text}")
+        try:
+            error_detail = e.response.json().get('message', 'Unknown HTTP error from Paystack.')
+        except json.JSONDecodeError:
+            error_detail = e.response.text # Fallback if response is not JSON
+        raise HTTPException(status_code=500, detail=f"Paystack API error: {error_detail}")
+    except Exception as e:
+        # Catch any other unexpected errors during the process
+        print(f"Error creating Paystack payment: {e}")
+        import traceback
+        print(traceback.format_exc()) # Print full traceback for debugging
+        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
+
 
     
 @app.post("/cancel-subscription")

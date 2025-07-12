@@ -290,14 +290,13 @@ export default function HomePage() {
 
         {/* Secondary CTAs */}
         <div className="flex flex-col sm:flex-row justify-center gap-4 mt-8">
-          <Link href="/upload" className="inline-flex items-center justify-center bg-gray-200 text-gray-800 font-bold py-3 px-8 rounded-full text-xl shadow-md transition duration-300 ease-in-out hover:bg-gray-300">
-            Upload Image from Files 📂
-          </Link>
+         
 
           {/* Button to Pricing Page */}
           <Link href="/pricing" className="inline-flex items-center justify-center bg-green-100 text-green-700 font-bold py-3 px-8 rounded-full text-xl shadow-md transition duration-300 ease-in-out hover:bg-green-200">
             View Plans & Pricing 💰
           </Link>
+          
         </div>
       </div>
 

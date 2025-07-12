@@ -9,7 +9,7 @@ interface Plan {
   price: string;
   priceDetails: string;
   features: string[];
-  buttonText: string;
+  buttonText?: string;
   isPopular?: boolean;
   paystackPlanCode?: string | null;
 }
@@ -26,7 +26,6 @@ const plans: Plan[] = [
       'Access to community tips',
       'No credit card required'
     ],
-    buttonText: 'Choose Free',
     paystackPlanCode: null,
   },
   {
@@ -42,7 +41,7 @@ const plans: Plan[] = [
       'Ad-free experience'
     ],
     buttonText: 'Choose Basic',
-    paystackPlanCode: "PLN_lrkikt1qz6r5mig",
+    paystackPlanCode: "PLN_pb8k1oxtu8n3bh1",
   },
   {
     id: 'standard',
@@ -58,7 +57,7 @@ const plans: Plan[] = [
     ],
     buttonText: 'Choose Standard',
     isPopular: true,
-    paystackPlanCode: "PLN_9v76fs96u1us4o0",
+    paystackPlanCode: "PLN_qc9ac75tvut6h0h",
   },
   {
     id: 'premium',
@@ -73,7 +72,7 @@ const plans: Plan[] = [
       'Personalized beauty consultations'
     ],
     buttonText: 'Choose Premium',
-    paystackPlanCode: "PLN_smf4ocf5w0my58c",
+    paystackPlanCode: "PLN_x3g9ffyhjwjtv74",
   },
 ];
 
