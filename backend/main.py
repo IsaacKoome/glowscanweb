@@ -82,7 +82,7 @@ SUBSCRIPTION_PLANS = {
         "gemini_quota": 500, # This will be overridden in /predict for now
         "gpt4o_quota": 0,
         "model_preference": "gemini",
-        "amount_kes_cents": 0,
+        "amount_cents": 0,
         "currency": "USD",
         "paystack_plan_code": None
     },
@@ -90,7 +90,7 @@ SUBSCRIPTION_PLANS = {
         "gemini_quota": 10,
         "gpt4o_quota": 3,
         "model_preference": "gpt4o",
-        "amount_cents": 5, # USD 5.00 -> 500 cents
+        "amount_cents": 500, # USD 5.00 -> 500 cents
         "currency": "USD",
         "paystack_plan_code": "PLN_s7gnbckddqplh9e" # YOUR ACTUAL BASIC PLAN CODE - UPDATED
     },
@@ -255,7 +255,7 @@ async def create_paystack_payment(request: Request, x_user_id: str = Header(...,
 
     plan_info = SUBSCRIPTION_PLANS.get(plan_id)
     # Ensure the plan exists and is not the free plan (which doesn't require Paystack payment)
-    if not plan_info or plan_info["amount_kes_cents"] == 0:
+    if not plan_info or plan_info["amount_cents"] == 0:
         raise HTTPException(status_code=404, detail="Invalid plan ID or free plan selected for payment.")
 
     if not PAYSTACK_SECRET_KEY:
@@ -267,7 +267,7 @@ async def create_paystack_payment(request: Request, x_user_id: str = Header(...,
 
     # Prepare data for Paystack transaction initialization
     # Paystack expects amount in kobo (for NGN) or cents (for USD, KES, etc.)
-    amount_in_cents = plan_info["amount_kes_cents"] # Assuming this is correctly set for KES or USD cents
+    amount_in_cents = plan_info["amount_cents"] # Assuming this is correctly set for KES or USD cents
 
     try:
         async with httpx.AsyncClient() as client:
