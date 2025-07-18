@@ -5,6 +5,7 @@ import { AuthProvider } from '../context/AuthContext';
 import HeaderNavClient from '@/components/HeaderNavClient';
 import Script from 'next/script'; // ✅ import Script from next/script
 
+
 export const metadata = {
   title: 'WonderJoy AI ✨',
   description: 'AI-powered skin analysis and beauty assistant',
@@ -48,6 +49,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </div>
           </footer>
         </AuthProvider>
+        
       </body>
     </html>
   );
