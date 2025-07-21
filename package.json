@@ -9,8 +9,11 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@heroicons/react": "^2.2.0",
     "@stripe/stripe-js": "^7.4.0",
+    "@types/axios": "^0.9.36",
     "@vercel/analytics": "^1.5.0",
+    "axios": "^1.10.0",
     "firebase": "^11.10.0",
     "next": "15.3.4",
     "react": "^19.0.0",
