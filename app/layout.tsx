@@ -26,23 +26,25 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           `}
         </Script>
         <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-1335773994240018"
-     crossOrigin="anonymous"></script>
+          crossOrigin="anonymous"></script>
       </head>
       <body className="bg-white text-gray-900 font-sans antialiased">
         <AuthProvider>
-          <header className="bg-gradient-to-r from-pink-500 to-purple-600 shadow-lg p-4">
-            <div className="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-center px-4">
+          <header className="bg-gradient-to-r from-pink-500 to-purple-600 shadow-lg p-4 fixed w-full z-10 top-0"> {/* Added fixed positioning and z-index */}
+            <div className="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-center px-4 relative"> {/* Added relative for mobile menu positioning */}
               <Link
                 href="/"
                 className="text-3xl font-extrabold text-white mb-2 sm:mb-0 hover:opacity-90 transition-opacity"
               >
                 WonderJoy AI ✨
               </Link>
-              <HeaderNavClient />
+              <HeaderNavClient /> {/* This component now handles all primary navigation */}
             </div>
           </header>
 
-          <main className="min-h-screen">{children}</main>
+          <main className="min-h-screen pt-20"> {/* Added padding-top to account for fixed header */}
+            {children}
+          </main>
 
           <footer className="bg-gray-800 text-white p-6 text-center text-sm">
             <div className="max-w-7xl mx-auto">
@@ -51,7 +53,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </div>
           </footer>
         </AuthProvider>
-        
       </body>
     </html>
   );
