@@ -2,7 +2,8 @@
 'use client'; // This directive makes this a Client Component
 
 // Import React itself, crucial for JSX and React.FC type
-import React, { useState, useRef, useEffect, type Dispatch, type SetStateAction } from 'react';
+// Removed 'type Dispatch, type SetStateAction' as they are not directly used
+import React, { useState, useRef, useEffect } from 'react';
 
 import axios from 'axios'; // Standard import for axios
 
@@ -197,12 +198,11 @@ const ChatPage: React.FC = () => {
     const renderMessage = (message: ChatMessage, index: number): React.ReactElement | null => {
         // Use type guards (`if (message.type === '...')`) to narrow the type
         if (message.type === 'user-image') {
-            // No need for `as UserImageMessage` because TypeScript narrows the type automatically within this block
             return (
                 <div key={index} className="flex justify-end mb-4">
                     <div className="bg-gradient-to-br from-blue-400 to-indigo-500 text-white rounded-lg p-3 max-w-xs shadow-md">
                         <p className="font-semibold text-sm mb-2">You uploaded:</p>
-                        <p className="text-xs italic mb-2">{message.fileName}</p> {/* `message` is now UserImageMessage */}
+                        <p className="text-xs italic mb-2">{message.fileName}</p>
                         <Image
                             src={message.content} // Data URL from FileReader
                             alt="Your selfie preview"
@@ -216,7 +216,7 @@ const ChatPage: React.FC = () => {
                 </div>
             );
         } else if (message.type === 'ai-analysis') {
-            const analysis = message.content; // TypeScript knows `message.content` is `AiAnalysisResult`
+            const analysis = message.content;
             return (
                 <div key={index} className="flex justify-start mb-6">
                     <div className="bg-white rounded-lg p-5 max-w-xl shadow-lg border border-purple-200">
@@ -288,12 +288,11 @@ const ChatPage: React.FC = () => {
                 </div>
             );
         } else if (message.type === 'info') {
-            // No need for `as InfoMessage`
             return (
                 <div key={index} className="flex justify-start mb-4">
                     <div className="bg-gray-100 text-gray-600 rounded-lg p-3 max-w-xs shadow-sm italic animate-pulse">
                         <ArrowPathIcon className="h-5 w-5 inline-block text-gray-500 mr-2 animate-spin" />
-                        {message.content} {/* `message` is now InfoMessage */}
+                        {message.content}
                     </div>
                 </div>
             );
@@ -321,7 +320,7 @@ const ChatPage: React.FC = () => {
                         <p className="text-md">Upload a clear selfie and let WonderJoy AI reveal your beauty secrets!</p>
                     </div>
                 )}
-                {messages.map((msg, index) => renderMessage(msg, index))} {/* Ensure map is correctly calling renderMessage */}
+                {messages.map((msg, index) => renderMessage(msg, index))}
                 <div ref={messagesEndRef} /> {/* For auto-scrolling */}
             </div>
 
