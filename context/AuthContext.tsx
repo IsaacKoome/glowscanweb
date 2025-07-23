@@ -21,7 +21,7 @@ interface UserData {
   paystackCustomerId?: string;
   paystackSubscriptionStatus?: string;
   paystackLastTxRef?: string;
-  paystackSubscriptionCode?: string; // <-- ADDED THIS LINE
+  paystackSubscriptionCode?: string;
   [key: string]: any; // catch-all for extra Firestore fields
 }
 
@@ -36,11 +36,11 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true); // Start as true
   const router = useRouter();
 
   const setupUserListener = useCallback((firebaseUser: FirebaseUser) => {
-    if (!firebaseUser) return () => {};
+    if (!firebaseUser) return () => {}; // Should not happen if called correctly
 
     const userDocRef: DocumentReference = doc(db, 'users', firebaseUser.uid);
     console.log(`AuthContext: Setting up onSnapshot listener for user ${firebaseUser.uid}`);
@@ -52,7 +52,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const updatedUserData: UserData = {
           uid: firebaseUser.uid,
           email: firebaseUser.email,
-          ...data, // Spread first
+          ...data,
           subscriptionPlan: data?.subscriptionPlan || 'free',
           geminiCountToday: data?.geminiCountToday ?? 0,
           gpt4oCountToday: data?.gpt4oCountToday ?? 0,
@@ -60,15 +60,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           paystackCustomerId: data?.paystackCustomerId ?? undefined,
           paystackSubscriptionStatus: data?.paystackSubscriptionStatus ?? undefined,
           paystackLastTxRef: data?.paystackLastTxRef ?? undefined,
-          paystackSubscriptionCode: data?.paystackSubscriptionCode ?? undefined, // <-- ADDED/FIXED THIS LINE
+          paystackSubscriptionCode: data?.paystackSubscriptionCode ?? undefined,
         };
 
         setUser(updatedUserData);
-        console.log(`AuthContext: onSnapshot updated user data: ${updatedUserData.subscriptionPlan}`);
-        // Log the subscription code to confirm it's being read
+        console.log(`AuthContext: onSnapshot updated user data for ${firebaseUser.email || firebaseUser.uid}. Subscription: ${updatedUserData.subscriptionPlan}`);
         console.log(`AuthContext: paystackSubscriptionCode read from Firestore: ${updatedUserData.paystackSubscriptionCode}`);
       } else {
-        console.log(`AuthContext: User document for ${firebaseUser.uid} does not exist. Creating...`);
+        console.log(`AuthContext: User document for ${firebaseUser.uid} does not exist. Creating default.`);
         const newUserData: UserData = {
           uid: firebaseUser.uid,
           email: firebaseUser.email,
@@ -85,13 +84,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           })
           .catch((error) => {
             console.error("Error creating user document:", error);
-            setUser(newUserData);
+            setUser(newUserData); // Still set user locally even if doc creation fails for some reason
           });
       }
-
-      setLoading(false);
+      setLoading(false); // Only set loading to false AFTER user data is determined/fetched
     }, (error) => {
       console.error("Error listening to user document:", error);
+      setUser(null); // Clear user if listener fails critically
       setLoading(false);
     });
 
@@ -99,59 +98,99 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const refreshUser = useCallback(async () => {
-    console.log("AuthContext: refreshUser called. Re-evaluating listener.");
+    console.log("AuthContext: refreshUser called. Triggering auth state re-evaluation.");
+    // This function can be used to manually trigger a refresh if needed
+    // However, the main useEffect below is handling the primary auth state changes.
+    // Force a re-evaluation of the auth state
     if (auth.currentUser) {
-      if (user === null) setLoading(true);
-      onAuthStateChanged(auth, (firebaseUser) => {
-        if (firebaseUser) {
-          setupUserListener(firebaseUser);
-        } else {
-          setUser(null);
-          setLoading(false);
-        }
-      });
+        setLoading(true); // Indicate loading while re-evaluating
+        // No need to call onAuthStateChanged directly here,
+        // as the main useEffect is already listening.
+        // If you truly need to force it, you might need a dummy re-auth or similar
+        // but for now, let the primary useEffect handle it.
+        setupUserListener(auth.currentUser); // Directly try to setup listener if user already exists
     } else {
-      setUser(null);
-      setLoading(false);
+        setUser(null);
+        setLoading(false);
     }
-  }, [setupUserListener, user]);
+  }, [setupUserListener]); // Include setupUserListener in deps
 
   useEffect(() => {
-    console.log("AuthContext: useEffect running, setting up onAuthStateChanged listener.");
-    let unsubscribeFirestore: () => void = () => {};
+    console.log("AuthContext: Main useEffect running, setting up onAuthStateChanged listener.");
+    let unsubscribeFirestore: (() => void) | null = null; // Initialize as null
 
     const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
-      unsubscribeFirestore();
+      // Always unsubscribe previous Firestore listener first
+      if (unsubscribeFirestore) {
+        unsubscribeFirestore();
+        unsubscribeFirestore = null;
+      }
 
       if (firebaseUser) {
-        console.log("AuthContext: onAuthStateChanged fired. User logged in:", firebaseUser.uid);
+        console.log(`AuthContext: onAuthStateChanged detected user: ${firebaseUser.email || firebaseUser.uid}. Is anonymous? ${firebaseUser.isAnonymous}`);
+        // If it's an anonymous user AND they just logged in with email/password,
+        // Firebase will automatically link the accounts.
+        // We set loading true *before* setting up the listener to avoid flicker.
+        setLoading(true);
         unsubscribeFirestore = setupUserListener(firebaseUser);
       } else {
-        console.log("AuthContext: No user logged in. Attempting anonymous sign-in.");
-        try {
-          await signInAnonymously(auth);
-        } catch (error) {
-          console.error("Error during anonymous sign-in:", error);
-          setUser(null);
-          setLoading(false);
+        console.log("AuthContext: No authenticated user. Attempting anonymous sign-in or clearing state.");
+        // Check if there was previously a user and they signed out
+        if (user !== null) { // This check prevents redundant anonymous sign-ins
+             setUser(null);
+             setLoading(false);
+             console.log("AuthContext: User signed out, state cleared.");
+        } else if (!auth.currentUser) { // Only sign in anonymously if no user exists at all
+            try {
+                // Only attempt anonymous sign-in if no user is present (initial load)
+                if (window.location.pathname !== '/login') { // Prevent anonymous sign-in loop on login page
+                  setLoading(true); // Set loading while waiting for anonymous sign-in
+                  const anonUserCred = await signInAnonymously(auth);
+                  console.log("AuthContext: Anonymous user signed in:", anonUserCred.user.uid);
+                  unsubscribeFirestore = setupUserListener(anonUserCred.user);
+                } else {
+                    setUser(null);
+                    setLoading(false);
+                }
+            } catch (error) {
+                console.error("AuthContext: Error during anonymous sign-in:", error);
+                setUser(null);
+                setLoading(false);
+            }
+        } else {
+             // This case handles situations where auth.currentUser exists but it's not detected by the listener yet
+             // (e.g., initial state is null, but auth has a user from a previous session).
+             // This branch should ideally be rare with onAuthStateChanged.
+             setLoading(false);
         }
       }
     });
 
     return () => {
-      console.log("AuthContext: Cleaning up listeners.");
+      console.log("AuthContext: Cleaning up Auth and Firestore listeners.");
       unsubscribeAuth();
-      unsubscribeFirestore();
+      if (unsubscribeFirestore) {
+        unsubscribeFirestore();
+      }
     };
-  }, [setupUserListener]);
+  }, [setupUserListener, user, router]); // Added 'user' and 'router' to dependencies
 
   const logout = async () => {
     try {
-      await firebaseSignOut(auth);
-      console.log("User signed out successfully.");
-      router.push('/login');
+      if (auth.currentUser && !auth.currentUser.isAnonymous) {
+        await firebaseSignOut(auth);
+        console.log("AuthContext: Authenticated user signed out successfully.");
+      } else {
+        // If it's an anonymous user, just clear local state and navigate
+        console.log("AuthContext: Anonymous user, clearing state and navigating.");
+        setUser(null);
+        setLoading(false);
+        // Firebase Auth's onAuthStateChanged will likely re-sign in anonymously again
+        // due to the useEffect logic, but that's fine for anonymity.
+      }
+      router.push('/login'); // Always redirect to login after logout
     } catch (error) {
-      console.error("Error signing out:", error);
+      console.error("AuthContext: Error signing out:", error);
     }
   };
 
