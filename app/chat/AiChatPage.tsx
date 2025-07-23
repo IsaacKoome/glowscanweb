@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
-import Link from 'next/link';
+import Link from 'next/link'; // Make sure Link is imported for the login button
 import { Button } from "@/components/ui/button"; // Assuming you have this Button component
 import { Input } from "@/components/ui/input";   // Assuming you have this Input component
 import {
@@ -22,7 +22,7 @@ import {
   query,
   orderBy,
   onSnapshot,
-  doc, // For potentially interacting with user docs or specific message docs
+  // doc, // REMOVED: No longer needed based on the previous error
 } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, storage } from "@/lib/firebase"; // Your Firebase config
@@ -112,7 +112,7 @@ export default function AiChatPage() {
     setIsProcessingAI(true); // Start AI processing indicator
 
     try {
-      let userMessagePayload: Omit<AIMessage, 'id'> = { // Omit 'id' as Firestore generates it
+      const userMessagePayload: Omit<AIMessage, 'id'> = { // CHANGED: 'let' to 'const'
         sender: 'user',
         timestamp: Timestamp.now(),
         type: 'text',
@@ -137,7 +137,8 @@ export default function AiChatPage() {
       }
 
       // Add user's message to Firestore
-      const userMessageRef = await addDoc(collection(db, userChatCollectionPath!), userMessagePayload);
+      // CHANGED: Removed 'const userMessageRef =' as it's not used
+      await addDoc(collection(db, userChatCollectionPath!), userMessagePayload);
       // The onSnapshot listener will update the state with this new message
 
       // --- Crucial: Trigger your AI Backend Here ---
@@ -146,7 +147,7 @@ export default function AiChatPage() {
       // Example (conceptual):
       // const aiResponse = await callFirebaseCloudFunction('analyzeBeauty', {
       //   userId: user.uid,
-      //   messageId: userMessageRef.id, // Pass message ID if AI needs to reference it
+      //   // messageId: userMessageRef.id, // If you need this, you'd re-add userMessageRef
       //   userQuery: userMessagePayload.content,
       //   imageUrl: userMessagePayload.imageUrlForAnalysis,
       //   videoUrl: userMessagePayload.mediaUrl, // If video analysis is a thing
