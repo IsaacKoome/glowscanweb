@@ -1,4 +1,4 @@
-//context/AuthContext
+// context/AuthContext.tsx
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
@@ -40,80 +40,83 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
 
   const setupUserListener = useCallback((firebaseUser: FirebaseUser) => {
-    if (!firebaseUser) return () => {}; // Should not happen if called correctly
+    if (!firebaseUser) return () => {};
 
     const userDocRef: DocumentReference = doc(db, 'users', firebaseUser.uid);
     console.log(`AuthContext: Setting up onSnapshot listener for user ${firebaseUser.uid}`);
 
-    const unsubscribe = onSnapshot(userDocRef, (docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data();
+    // Added safety delay for onSnapshot (Step 4 from ChatGPT)
+    let unsubscribe: () => void;
+    const timeoutId = setTimeout(() => {
+      unsubscribe = onSnapshot(userDocRef, (docSnap) => {
+        if (docSnap.exists()) {
+          const data = docSnap.data();
 
-        const updatedUserData: UserData = {
-          uid: firebaseUser.uid,
-          email: firebaseUser.email,
-          ...data,
-          subscriptionPlan: data?.subscriptionPlan || 'free',
-          geminiCountToday: data?.geminiCountToday ?? 0,
-          gpt4oCountToday: data?.gpt4oCountToday ?? 0,
-          lastAnalysisDate: data?.lastAnalysisDate ?? new Date().toISOString().split('T')[0],
-          paystackCustomerId: data?.paystackCustomerId ?? undefined,
-          paystackSubscriptionStatus: data?.paystackSubscriptionStatus ?? undefined,
-          paystackLastTxRef: data?.paystackLastTxRef ?? undefined,
-          paystackSubscriptionCode: data?.paystackSubscriptionCode ?? undefined,
-        };
+          const updatedUserData: UserData = {
+            uid: firebaseUser.uid,
+            email: firebaseUser.email,
+            ...data,
+            subscriptionPlan: data?.subscriptionPlan || 'free',
+            geminiCountToday: data?.geminiCountToday ?? 0,
+            gpt4oCountToday: data?.gpt4oCountToday ?? 0,
+            lastAnalysisDate: data?.lastAnalysisDate ?? new Date().toISOString().split('T')[0],
+            paystackCustomerId: data?.paystackCustomerId ?? undefined,
+            paystackSubscriptionStatus: data?.paystackSubscriptionStatus ?? undefined,
+            paystackLastTxRef: data?.paystackLastTxRef ?? undefined,
+            paystackSubscriptionCode: data?.paystackSubscriptionCode ?? undefined,
+          };
 
-        setUser(updatedUserData);
-        console.log(`AuthContext: onSnapshot updated user data for ${firebaseUser.email || firebaseUser.uid}. Subscription: ${updatedUserData.subscriptionPlan}`);
-        console.log(`AuthContext: paystackSubscriptionCode read from Firestore: ${updatedUserData.paystackSubscriptionCode}`);
-      } else {
-        console.log(`AuthContext: User document for ${firebaseUser.uid} does not exist. Creating default.`);
-        const newUserData: UserData = {
-          uid: firebaseUser.uid,
-          email: firebaseUser.email,
-          subscriptionPlan: 'free',
-          geminiCountToday: 0,
-          gpt4oCountToday: 0,
-          lastAnalysisDate: new Date().toISOString().split('T')[0],
-        };
+          setUser(updatedUserData);
+          console.log(`AuthContext: onSnapshot updated user data for ${firebaseUser.email || firebaseUser.uid}. Subscription: ${updatedUserData.subscriptionPlan}`);
+          console.log(`AuthContext: paystackSubscriptionCode read from Firestore: ${updatedUserData.paystackSubscriptionCode}`);
+        } else {
+          console.log(`AuthContext: User document for ${firebaseUser.uid} does not exist. Creating default.`);
+          const newUserData: UserData = {
+            uid: firebaseUser.uid,
+            email: firebaseUser.email,
+            subscriptionPlan: 'free',
+            geminiCountToday: 0,
+            gpt4oCountToday: 0,
+            lastAnalysisDate: new Date().toISOString().split('T')[0],
+          };
 
-        setDoc(userDocRef, newUserData, { merge: true })
-          .then(() => {
-            console.log(`Firestore document created for new user: ${firebaseUser.uid}`);
-            setUser(newUserData);
-          })
-          .catch((error) => {
-            console.error("Error creating user document:", error);
-            setUser(newUserData); // Still set user locally even if doc creation fails for some reason
-          });
+          setDoc(userDocRef, newUserData, { merge: true })
+            .then(() => {
+              console.log(`Firestore document created for new user: ${firebaseUser.uid}`);
+              setUser(newUserData);
+            })
+            .catch((error) => {
+              console.error("Error creating user document:", error);
+              setUser(newUserData); // Still set user locally even if doc creation fails for some reason
+            });
+        }
+        setLoading(false); // Only set loading to false AFTER user data is determined/fetched
+      }, (error) => {
+        console.error("Error listening to user document:", error);
+        setUser(null); // Clear user if listener fails critically
+        setLoading(false);
+      });
+    }, 500); // 500ms delay
+
+    // Ensure the cleanup also clears the timeout if it hasn't fired yet
+    return () => {
+      clearTimeout(timeoutId);
+      if (unsubscribe) {
+        unsubscribe();
       }
-      setLoading(false); // Only set loading to false AFTER user data is determined/fetched
-    }, (error) => {
-      console.error("Error listening to user document:", error);
-      setUser(null); // Clear user if listener fails critically
-      setLoading(false);
-    });
-
-    return unsubscribe;
+    };
   }, []);
 
   const refreshUser = useCallback(async () => {
     console.log("AuthContext: refreshUser called. Triggering auth state re-evaluation.");
-    // This function can be used to manually trigger a refresh if needed
-    // However, the main useEffect below is handling the primary auth state changes.
-    // Force a re-evaluation of the auth state
     if (auth.currentUser) {
-        setLoading(true); // Indicate loading while re-evaluating
-        // No need to call onAuthStateChanged directly here,
-        // as the main useEffect is already listening.
-        // If you truly need to force it, you might need a dummy re-auth or similar
-        // but for now, let the primary useEffect handle it.
-        setupUserListener(auth.currentUser); // Directly try to setup listener if user already exists
+        setLoading(true);
+        setupUserListener(auth.currentUser);
     } else {
         setUser(null);
         setLoading(false);
     }
-  }, [setupUserListener]); // Include setupUserListener in deps
+  }, [setupUserListener]);
 
   useEffect(() => {
     console.log("AuthContext: Main useEffect running, setting up onAuthStateChanged listener.");
@@ -128,23 +131,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (firebaseUser) {
         console.log(`AuthContext: onAuthStateChanged detected user: ${firebaseUser.email || firebaseUser.uid}. Is anonymous? ${firebaseUser.isAnonymous}`);
-        // If it's an anonymous user AND they just logged in with email/password,
-        // Firebase will automatically link the accounts.
-        // We set loading true *before* setting up the listener to avoid flicker.
+        // Add logging from ChatGPT (Step 1)
+        console.log("AuthContext: About to set up Firestore snapshot for UID:", firebaseUser.uid);
         setLoading(true);
         unsubscribeFirestore = setupUserListener(firebaseUser);
       } else {
         console.log("AuthContext: No authenticated user. Attempting anonymous sign-in or clearing state.");
         // Check if there was previously a user and they signed out
-        if (user !== null) { // This check prevents redundant anonymous sign-ins
+        if (user !== null) {
              setUser(null);
              setLoading(false);
              console.log("AuthContext: User signed out, state cleared.");
         } else if (!auth.currentUser) { // Only sign in anonymously if no user exists at all
             try {
-                // Only attempt anonymous sign-in if no user is present (initial load)
-                if (window.location.pathname !== '/login') { // Prevent anonymous sign-in loop on login page
-                  setLoading(true); // Set loading while waiting for anonymous sign-in
+                // Only attempt anonymous sign-in if not on the login page
+                if (window.location.pathname !== '/login') {
+                  setLoading(true);
                   const anonUserCred = await signInAnonymously(auth);
                   console.log("AuthContext: Anonymous user signed in:", anonUserCred.user.uid);
                   unsubscribeFirestore = setupUserListener(anonUserCred.user);
@@ -158,9 +160,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 setLoading(false);
             }
         } else {
-             // This case handles situations where auth.currentUser exists but it's not detected by the listener yet
-             // (e.g., initial state is null, but auth has a user from a previous session).
-             // This branch should ideally be rare with onAuthStateChanged.
              setLoading(false);
         }
       }
@@ -173,7 +172,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         unsubscribeFirestore();
       }
     };
-  }, [setupUserListener, user, router]); // Added 'user' and 'router' to dependencies
+  }, [setupUserListener, user, router]);
 
   const logout = async () => {
     try {
@@ -181,14 +180,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await firebaseSignOut(auth);
         console.log("AuthContext: Authenticated user signed out successfully.");
       } else {
-        // If it's an anonymous user, just clear local state and navigate
         console.log("AuthContext: Anonymous user, clearing state and navigating.");
         setUser(null);
         setLoading(false);
-        // Firebase Auth's onAuthStateChanged will likely re-sign in anonymously again
-        // due to the useEffect logic, but that's fine for anonymity.
       }
-      router.push('/login'); // Always redirect to login after logout
+      router.push('/login');
     } catch (error) {
       console.error("AuthContext: Error signing out:", error);
     }

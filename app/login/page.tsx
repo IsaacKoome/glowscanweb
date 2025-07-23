@@ -4,13 +4,13 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation'; // For navigation
 import { auth } from '../../lib/firebase'; // Import auth instance
-import { 
-  createUserWithEmailAndPassword, 
+import {
+  createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
-   
 } from 'firebase/auth';
 
 import { FirebaseError } from 'firebase/app'; // Import FirebaseError for type checking
+import { useAuth } from '../../context/AuthContext'; // IMPORT useAuth
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -19,6 +19,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(''); // For success or error messages
   const router = useRouter();
+  const { refreshUser } = useAuth(); // GET refreshUser from context
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,6 +38,12 @@ export default function LoginPage() {
         setMessage('Login successful!');
         // Redirect to a protected page, e.g., the profile page or home
         router.push('/'); // Or '/profile' once created
+
+        // ADD THIS BLOCK: (Step 3 from ChatGPT)
+        setTimeout(() => {
+          console.log("LoginPage: Forcing user refresh manually after login...");
+          refreshUser(); // This triggers AuthContext to re-evaluate the user state
+        }, 500); // Give it a moment to ensure auth state is propagated
       }
     } catch (error: any) {
       if (error instanceof FirebaseError) {
@@ -77,8 +84,8 @@ export default function LoginPage() {
           {isRegistering ? 'Join WonderJoy AI ✨' : 'Welcome Back! 👋'}
         </h1>
         <p className="text-gray-700 mb-8">
-          {isRegistering ? 
-            "Create your account to unlock personalized beauty insights." : 
+          {isRegistering ?
+            "Create your account to unlock personalized beauty insights." :
             "Log in to continue your journey to radiant skin and flawless makeup."
           }
         </p>
