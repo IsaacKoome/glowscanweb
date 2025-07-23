@@ -2,6 +2,7 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
+import { getStorage } from 'firebase/storage';
 import { getAnalytics, isSupported, Analytics } from "firebase/analytics"; // Import Analytics type and isSupported
 
 // Your web app's Firebase configuration
@@ -24,6 +25,7 @@ const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 // Get Firebase services
 const auth = getAuth(app);
 const db = getFirestore(app);
+const storage = getStorage(app);
 
 // Initialize analytics conditionally and asynchronously
 let analytics: Analytics | null = null; // Declare with type and initialize to null
@@ -47,4 +49,4 @@ if (typeof window !== 'undefined') {
 }
 
 // Export all necessary services
-export { app, auth, db, analytics }; // Export analytics (will be null on server, then populated on client)
+export { app, auth,storage, db, analytics }; // Export analytics (will be null on server, then populated on client)
