@@ -26,6 +26,7 @@ const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 const auth = getAuth(app);
 const db = getFirestore(app);
 const storage = getStorage(app);
+const firestore = getFirestore(app);
 
 // Initialize analytics conditionally and asynchronously
 let analytics: Analytics | null = null; // Declare with type and initialize to null
@@ -49,4 +50,4 @@ if (typeof window !== 'undefined') {
 }
 
 // Export all necessary services
-export { app, auth,storage, db, analytics }; // Export analytics (will be null on server, then populated on client)
+export { app, firestore, auth,storage, db, analytics }; // Export analytics (will be null on server, then populated on client)
