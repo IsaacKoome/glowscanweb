@@ -62,6 +62,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
 
   const unsubscribeFirestoreRef = useRef<Unsubscribe | null>(null);
+  const isMountedRef = useRef(false);
 
   const setupUserListener = useCallback((firebaseUser: FirebaseUser) => {
     const userDocRef: DocumentReference = doc(db, 'users', firebaseUser.uid);
@@ -88,9 +89,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             paystackSubscriptionCode: data?.paystackSubscriptionCode ?? undefined,
           };
 
-          setUser(updatedUserData);
-          console.log(`AuthContext: onSnapshot updated user data for ${firebaseUser.email || firebaseUser.uid}. Subscription: ${updatedUserData.subscriptionPlan}`);
-          console.log(`AuthContext: paystackSubscriptionCode read from Firestore: ${updatedUserData.paystackSubscriptionCode}`);
+          if (isMountedRef.current) {
+            setUser(updatedUserData);
+            console.log(`AuthContext: onSnapshot updated user data for ${firebaseUser.email || firebaseUser.uid}. Subscription: ${updatedUserData.subscriptionPlan}`);
+          }
         } else {
           console.log(`AuthContext: User document for ${firebaseUser.uid} does not exist. Creating default.`);
           const newUserData: UserData = {
@@ -104,26 +106,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
           setDoc(userDocRef, newUserData, { merge: true })
             .then(() => {
-              console.log(`Firestore document created for new user: ${firebaseUser.uid}`);
-              setUser(newUserData);
+              if (isMountedRef.current) {
+                console.log(`Firestore document created for new user: ${firebaseUser.uid}`);
+                setUser(newUserData);
+              }
             })
             .catch((error) => {
               console.error('Error creating user document:', error);
-              setUser(newUserData);
+              if (isMountedRef.current) {
+                setUser(newUserData);
+              }
             });
         }
 
-        setLoading(false);
+        if (isMountedRef.current) {
+          setLoading(false);
+        }
       },
       (error) => {
         console.error('Error listening to user document:', error);
-        setUser(null);
-        setLoading(false);
+        if (isMountedRef.current) {
+          setUser(null);
+          setLoading(false);
+        }
       }
     );
 
-    // Store the unsubscribe function
     unsubscribeFirestoreRef.current = unsubscribe;
+    return unsubscribe;
   }, []);
 
   const refreshUser = useCallback(async () => {
@@ -131,7 +141,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (auth.currentUser) {
       setLoading(true);
       if (unsubscribeFirestoreRef.current) {
-        unsubscribeFirestoreRef.current(); // Clear old listener
+        unsubscribeFirestoreRef.current();
       }
       setupUserListener(auth.currentUser);
     } else {
@@ -140,10 +150,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [setupUserListener]);
 
+  const logout = useCallback(async () => {
+    try {
+      if (auth.currentUser && !auth.currentUser.isAnonymous) {
+        await firebaseSignOut(auth);
+        console.log('AuthContext: Authenticated user signed out successfully.');
+      } else {
+        console.log('AuthContext: Anonymous user, clearing state and navigating.');
+        setUser(null);
+        setLoading(false);
+      }
+
+      router.push('/login');
+    } catch (error) {
+      console.error('AuthContext: Error signing out:', error);
+    }
+  }, [router]);
+
   useEffect(() => {
+    isMountedRef.current = true;
     console.log('AuthContext: Main useEffect running, setting up onAuthStateChanged listener.');
 
     const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (!isMountedRef.current) return;
+
       if (unsubscribeFirestoreRef.current) {
         unsubscribeFirestoreRef.current();
         unsubscribeFirestoreRef.current = null;
@@ -183,30 +213,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     return () => {
+      isMountedRef.current = false;
       console.log('AuthContext: Cleaning up Auth and Firestore listeners.');
       unsubscribeAuth();
       if (unsubscribeFirestoreRef.current) {
         unsubscribeFirestoreRef.current();
       }
     };
-  }, [setupUserListener, router, user]);
-
-  const logout = async () => {
-    try {
-      if (auth.currentUser && !auth.currentUser.isAnonymous) {
-        await firebaseSignOut(auth);
-        console.log('AuthContext: Authenticated user signed out successfully.');
-      } else {
-        console.log('AuthContext: Anonymous user, clearing state and navigating.');
-        setUser(null);
-        setLoading(false);
-      }
-
-      router.push('/login');
-    } catch (error) {
-      console.error('AuthContext: Error signing out:', error);
-    }
-  };
+  }, [setupUserListener]); // Removed router and user from dependencies
 
   return (
     <AuthContext.Provider value={{ user, loading, logout, refreshUser }}>
