@@ -1,120 +1,224 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import {
-  onAuthStateChanged,
-  User as FirebaseUser,
-  getAuth,
-} from 'firebase/auth';
-import {
-  doc,
-  onSnapshot,
-  getDoc,
-  setDoc,
-} from 'firebase/firestore';
-import { auth, firestore } from '@/lib/firebase';
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+  ReactNode,
+  useRef,
+} from 'react';
 
-type UserData = {
+import {
+  User as FirebaseUser,
+  onAuthStateChanged,
+  signOut as firebaseSignOut,
+  signInAnonymously,
+} from 'firebase/auth';
+
+import {
+  getFirestore,
+  doc,
+  setDoc,
+  Firestore,
+  DocumentReference,
+  onSnapshot,
+  Unsubscribe,
+} from 'firebase/firestore';
+
+import { FirebaseApp } from 'firebase/app';
+import { auth } from '../lib/firebase';
+import { useRouter } from 'next/navigation';
+
+const db: Firestore = getFirestore(auth.app as FirebaseApp);
+
+interface UserData {
   uid: string;
   email: string | null;
-  subscriptionPlan: 'free' | 'premium';
-  createdAt: number;
-  name?: string;
-};
+  subscriptionPlan: string;
+  geminiCountToday: number;
+  gpt4oCountToday: number;
+  lastAnalysisDate: string;
+  paystackCustomerId?: string;
+  paystackSubscriptionStatus?: string;
+  paystackLastTxRef?: string;
+  paystackSubscriptionCode?: string;
+  [key: string]: any;
+}
 
-type AuthContextType = {
+interface AuthContextType {
   user: UserData | null;
-  firebaseUser: FirebaseUser | null;
-  authLoading: boolean;
-  refreshUser: () => void;
-};
+  loading: boolean;
+  logout: () => Promise<void>;
+  refreshUser: () => Promise<void>;
+}
 
-const AuthContext = createContext<AuthContextType>({
-  user: null,
-  firebaseUser: null,
-  authLoading: true,
-  refreshUser: () => {},
-});
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const useAuth = () => useContext(AuthContext);
-
-export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
+export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserData | null>(null);
-  const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
-  const [authLoading, setAuthLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const router = useRouter();
 
-  // Track Firestore unsubscribe function
-  let unsubscribeFirestore: (() => void) | null = null;
+  const unsubscribeFirestoreRef = useRef<Unsubscribe | null>(null);
 
-  const setupUserListener = (firebaseUser: FirebaseUser) => {
-    const userDocRef = doc(firestore, 'users', firebaseUser.uid);
+  const setupUserListener = useCallback((firebaseUser: FirebaseUser) => {
+    const userDocRef: DocumentReference = doc(db, 'users', firebaseUser.uid);
 
-    // Cancel previous snapshot if any
-    if (unsubscribeFirestore) {
-      unsubscribeFirestore();
-    }
+    console.log(`AuthContext: Setting up onSnapshot listener for user ${firebaseUser.uid}`);
 
-    // Delay to give Firestore time to create the document (in case of race conditions)
-    const delay = 500; // 0.5 seconds
-    console.log('AuthContext: Waiting', delay, 'ms before setting up snapshot for UID:', firebaseUser.uid);
-
-    setTimeout(() => {
-      console.log('AuthContext: Setting up Firestore onSnapshot listener for UID:', firebaseUser.uid);
-
-      unsubscribeFirestore = onSnapshot(userDocRef, async (docSnap) => {
+    const unsubscribe = onSnapshot(
+      userDocRef,
+      (docSnap) => {
         if (docSnap.exists()) {
-          const userData = docSnap.data() as UserData;
-          setUser(userData);
-          console.log('AuthContext: 🔄 onSnapshot updated user data:', userData);
+          const data = docSnap.data();
+
+          const updatedUserData: UserData = {
+            uid: firebaseUser.uid,
+            email: firebaseUser.email,
+            ...data,
+            subscriptionPlan: data?.subscriptionPlan || 'free',
+            geminiCountToday: data?.geminiCountToday ?? 0,
+            gpt4oCountToday: data?.gpt4oCountToday ?? 0,
+            lastAnalysisDate: data?.lastAnalysisDate ?? new Date().toISOString().split('T')[0],
+            paystackCustomerId: data?.paystackCustomerId ?? undefined,
+            paystackSubscriptionStatus: data?.paystackSubscriptionStatus ?? undefined,
+            paystackLastTxRef: data?.paystackLastTxRef ?? undefined,
+            paystackSubscriptionCode: data?.paystackSubscriptionCode ?? undefined,
+          };
+
+          setUser(updatedUserData);
+          console.log(`AuthContext: onSnapshot updated user data for ${firebaseUser.email || firebaseUser.uid}. Subscription: ${updatedUserData.subscriptionPlan}`);
+          console.log(`AuthContext: paystackSubscriptionCode read from Firestore: ${updatedUserData.paystackSubscriptionCode}`);
         } else {
-          console.log(`AuthContext: ❗ User document for ${firebaseUser.uid} does not exist. Creating default...`);
+          console.log(`AuthContext: User document for ${firebaseUser.uid} does not exist. Creating default.`);
           const newUserData: UserData = {
             uid: firebaseUser.uid,
             email: firebaseUser.email,
             subscriptionPlan: 'free',
-            createdAt: Date.now(),
+            geminiCountToday: 0,
+            gpt4oCountToday: 0,
+            lastAnalysisDate: new Date().toISOString().split('T')[0],
           };
-          await setDoc(userDocRef, newUserData, { merge: true });
-          console.log('AuthContext: ✅ Default user document created.');
-        }
-        setAuthLoading(false);
-      });
-    }, delay);
-  };
 
-  // This method can be used manually after login to force-refresh user data
-  const refreshUser = () => {
-    const authInstance = getAuth();
-    const currentUser = authInstance.currentUser;
-    console.log('AuthContext: 🔄 refreshUser() called. Current Firebase user:', currentUser?.email);
-    if (currentUser) {
-      setupUserListener(currentUser);
+          setDoc(userDocRef, newUserData, { merge: true })
+            .then(() => {
+              console.log(`Firestore document created for new user: ${firebaseUser.uid}`);
+              setUser(newUserData);
+            })
+            .catch((error) => {
+              console.error('Error creating user document:', error);
+              setUser(newUserData);
+            });
+        }
+
+        setLoading(false);
+      },
+      (error) => {
+        console.error('Error listening to user document:', error);
+        setUser(null);
+        setLoading(false);
+      }
+    );
+
+    // Store the unsubscribe function
+    unsubscribeFirestoreRef.current = unsubscribe;
+  }, []);
+
+  const refreshUser = useCallback(async () => {
+    console.log('AuthContext: refreshUser called. Triggering auth state re-evaluation.');
+    if (auth.currentUser) {
+      setLoading(true);
+      if (unsubscribeFirestoreRef.current) {
+        unsubscribeFirestoreRef.current(); // Clear old listener
+      }
+      setupUserListener(auth.currentUser);
+    } else {
+      setUser(null);
+      setLoading(false);
     }
-  };
+  }, [setupUserListener]);
 
   useEffect(() => {
-    const unsubscribeAuth = onAuthStateChanged(auth, (firebaseUser) => {
+    console.log('AuthContext: Main useEffect running, setting up onAuthStateChanged listener.');
+
+    const unsubscribeAuth = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (unsubscribeFirestoreRef.current) {
+        unsubscribeFirestoreRef.current();
+        unsubscribeFirestoreRef.current = null;
+      }
+
       if (firebaseUser) {
-        console.log('AuthContext: ✅ onAuthStateChanged detected user:', firebaseUser.email);
-        setFirebaseUser(firebaseUser);
+        console.log(`AuthContext: onAuthStateChanged detected user: ${firebaseUser.email || firebaseUser.uid}. Is anonymous? ${firebaseUser.isAnonymous}`);
+        setLoading(true);
         setupUserListener(firebaseUser);
       } else {
-        console.log('AuthContext: 🚫 No user is signed in');
-        setUser(null);
-        setFirebaseUser(null);
-        setAuthLoading(false);
+        console.log('AuthContext: No authenticated user. Attempting anonymous sign-in or clearing state.');
+
+        if (user !== null) {
+          setUser(null);
+          setLoading(false);
+          console.log('AuthContext: User signed out, state cleared.');
+        } else if (!auth.currentUser) {
+          try {
+            if (window.location.pathname !== '/login') {
+              setLoading(true);
+              const anonUserCred = await signInAnonymously(auth);
+              console.log('AuthContext: Anonymous user signed in:', anonUserCred.user.uid);
+              setupUserListener(anonUserCred.user);
+            } else {
+              setUser(null);
+              setLoading(false);
+            }
+          } catch (error) {
+            console.error('AuthContext: Error during anonymous sign-in:', error);
+            setUser(null);
+            setLoading(false);
+          }
+        } else {
+          setLoading(false);
+        }
       }
     });
 
     return () => {
+      console.log('AuthContext: Cleaning up Auth and Firestore listeners.');
       unsubscribeAuth();
-      if (unsubscribeFirestore) unsubscribeFirestore();
+      if (unsubscribeFirestoreRef.current) {
+        unsubscribeFirestoreRef.current();
+      }
     };
-  }, []);
+  }, [setupUserListener, router, user]);
+
+  const logout = async () => {
+    try {
+      if (auth.currentUser && !auth.currentUser.isAnonymous) {
+        await firebaseSignOut(auth);
+        console.log('AuthContext: Authenticated user signed out successfully.');
+      } else {
+        console.log('AuthContext: Anonymous user, clearing state and navigating.');
+        setUser(null);
+        setLoading(false);
+      }
+
+      router.push('/login');
+    } catch (error) {
+      console.error('AuthContext: Error signing out:', error);
+    }
+  };
 
   return (
-    <AuthContext.Provider value={{ user, firebaseUser, authLoading, refreshUser }}>
+    <AuthContext.Provider value={{ user, loading, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );
+}
+
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
 };
