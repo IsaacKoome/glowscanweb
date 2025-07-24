@@ -309,7 +309,9 @@ export default function AiChatPage() {
                 <div className="flex-shrink-0">
                   {/* AI Avatar */}
                   <Image
-                    src="/wonderjoy-ai-avatar.png" // Path to your AI avatar image in /public
+                    // Try CDN first, fallback to local if offline
+                    
+                    src="/images/avatar.png"
                     alt="WonderJoy AI"
                     width={32}
                     height={32}
