@@ -44,6 +44,8 @@ interface AIMessage {
 // Assuming you still have your AuthContext
 import { useAuth } from '../../context/AuthContext';
 
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://glowscan-backend-241128138627.us-central1.run.app';
+
 
 export default function AiChatPage() {
   const { user, loading: authLoading } = useAuth(); // Get user info from context
@@ -159,7 +161,7 @@ export default function AiChatPage() {
       }
 
       //Make the Api call to you backend
-      const response = await fetch('api/predict', {
+      const response = await fetch(`${BACKEND_URL}/chat-predict`, {
         method: 'POST',
         headers: {
           //'content-type': 'multipart-formData' is not set for formData
@@ -175,14 +177,18 @@ export default function AiChatPage() {
 
       const aiResponseData = await response.json();  //Get AI response data
 
-      //3. Add actual AI's data to firestore
-      await addDoc(collection(db, userChatCollectionPath),{
-        sender: 'ai',
-        type: aiResponseData.type || 'analysis_result', //use type from AI, 
-        content: aiResponseData.overall_summary || aiResponseData.message || "An AI response was received.",
-        aiAnalysisData: aiResponseData, //store the full AI response
-        timestamp: Timestamp.now() //use server side Timestamp for AI responses
-        } as Omit<AIMessage, 'id'>);
+      // Determine the content based on whether it's analysis or text
+      const aiContent = aiResponseData.type === 'analysis_result' ?
+                    aiResponseData.overall_summary || "Here's your analysis." :
+                    aiResponseData.message || "An AI response was received.";
+
+              await addDoc(collection(db, userChatCollectionPath!), {
+              sender: 'ai',
+              type: aiResponseData.type || 'text', // Use type from AI, default to 'text'
+              content: aiContent,
+              analysisData: aiResponseData.analysisData || null, // Store full analysisData if available
+              timestamp: Timestamp.now()
+              } as Omit<AIMessage, 'id'>);
 
     // --- END: REAL AI INTEGRATION ---
 

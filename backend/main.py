@@ -28,6 +28,7 @@ origins = [
     "https://www.wonderjoyai.com",
     "https://wonderjoyai.com",
     "http://localhost:3000",
+    "https://glowscanweb-csosvq25f-isaac-koomes-projects.vercel.app",
 ]
 
 app.add_middleware(
@@ -120,48 +121,36 @@ SUBSCRIPTION_PLANS = {
 def root():
     return {"message": "WonderJoy AI Backend is running"}
 
-# ✅ 6. Real AI analysis endpoint with user_id and model selection (existing)
+
+
+# ✅ 6. ORIGINAL AI analysis endpoint for LIVE ANALYSIS (app/page.tsx)
 @app.post("/predict")
 async def predict(
     file: UploadFile = File(...),
-    x_user_id: str = Header(..., alias="X-User-ID")
+    x_user_id: str = Header(..., alias="X-User-ID"),
+    model_choice: str = Header("gemini", alias="X-Model-Choice")
 ):
-    print(f"Received request for user: {x_user_id}, file: {file.filename}")
+    print(f"Received request for LIVE ANALYSIS for user: {x_user_id}, file: {file.filename}, model: {model_choice}")
 
     if not db:
-        print("ERROR: Firestore client is not initialized. Cannot manage quotas.")
         raise HTTPException(status_code=500, detail="Firestore not initialized. Cannot manage quotas.")
-    
-    # We still fetch user data for logging/future use, but it won't impact model selection for now
-    user_data = {}
-    try:
-        user_ref = db.collection("users").document(x_user_id)
-        user_doc = user_ref.get()
-        user_data = user_doc.to_dict() if user_doc.exists else {}
-        print(f"Successfully fetched user data for {x_user_id}. Exists: {user_doc.exists}")
-    except Exception as e:
-        print(f"ERROR: Failed to fetch user data from Firestore for {x_user_id}: {e}")
-        import traceback
-        print(traceback.format_exc())
-        # Do not raise HTTPException here, allow prediction to proceed with Gemini
-        # raise HTTPException(status_code=500, detail=f"Failed to retrieve user data: {str(e)}")
-    
-    current_plan = user_data.get("subscriptionPlan", "free") # Keep track of current plan for logging
 
-    # --- NEW LOGIC: Force Gemini Flash for all users, unlimited ---
-    model_to_use = "gemini"
-    print(f"User {x_user_id} (Plan: {current_plan}). Forcing unlimited Gemini Flash analysis.")
-    # No quota checks or OpenAI calls for now, directly proceed with Gemini
-    # --- END NEW LOGIC ---
+    # Check and update quota
+    allowed = await check_and_update_quota(x_user_id, model_choice)
+    if not allowed:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Quota exceeded for {model_choice} model. Upgrade to premium for unlimited access."
+        )
 
     try:
         image_bytes = await file.read()
-        
-        # Always use Gemini for analysis
-        gemini_image_part = {
+        image_part = {
             "mime_type": file.content_type,
             "data": image_bytes
         }
+
+        # Original prompt for detailed beauty analysis
         prompt = """
 You are a highly experienced, friendly, and encouraging AI skincare and makeup expert named WonderJoy AI. Your goal is to provide precise, actionable, and personalized feedback based on the user's selfie.
 
@@ -188,48 +177,74 @@ Crucial Instructions:
 3.  If no makeup is detected, state "no makeup detected" for relevant fields and provide general makeup enhancement tips.
 4.  For `skincare_advice_tips` and `makeup_enhancement_tips`, provide concise, actionable sentences.
 """
-        generation_config = {
-            "response_mime_type": "application/json"
-        }
-        response = gemini_model.generate_content(
-            contents=[prompt, gemini_image_part],
-            generation_config=generation_config
-        )
-        raw_response_text = response.text
 
-        if raw_response_text:
-            try:
-                result = json.loads(raw_response_text)
-                print(f"AI response successfully parsed: {result}")
-            except json.JSONDecodeError:
-                print(f"AI response not direct JSON, attempting to extract from markdown. Raw: {raw_response_text[:200]}...")
-                json_match = re.search(r"```json\n(.*)\n```", raw_response_text, re.DOTALL)
-                if json_match:
-                    json_string = json_match.group(1)
-                    result = json.loads(json_string)
-                    print(f"AI response extracted and parsed from markdown: {result}")
-                else:
-                    print(f"AI response not parsable as JSON. Raw text: {raw_response_text}")
-                    raise HTTPException(status_code=500, detail="AI did not return valid JSON. Raw response: " + raw_response_text)
+        contents = [prompt, image_part]
+        generation_config = {"response_mime_type": "application/json"}
+
+        response = None
+        if model_choice == "gemini" and gemini_model_live_analysis:
+            print("Using Gemini for live analysis...")
+            response = gemini_model_live_analysis.generate_content(
+                contents=contents,
+                generation_config=generation_config
+            )
+            raw_response_text = response.text
+        elif model_choice == "gpt4o" and openai_client:
+            print("Using GPT-4o for live analysis...")
+            # For GPT-4o, the image needs to be base64 encoded or a URL
+            # For local files, we'll encode it
+            base64_image = base64.b64encode(image_bytes).decode('utf-8')
+            gpt_response = openai_client.chat.completions.create(
+                model="gpt-4o",
+                messages=[
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt},
+                            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
+                        ]
+                    }
+                ],
+                response_model=None, # GPT-4o doesn't have a direct JSON response_mime_type like Gemini
+                max_tokens=2000,
+            )
+            raw_response_text = gpt_response.choices[0].message.content
+            # GPT-4o often wraps JSON in markdown, so we'll need to extract
+            json_match = re.search(r"```json\n(.*)\n```", raw_response_text, re.DOTALL)
+            if json_match:
+                raw_response_text = json_match.group(1)
+            else:
+                # If no markdown, assume it's direct JSON or log an error
+                print(f"GPT-4o response did not contain JSON in markdown format. Raw: {raw_response_text[:200]}...")
+                # Handle this case: raise error or attempt direct parse
         else:
-            print("AI response text is empty.")
+            raise HTTPException(status_code=400, detail="Invalid model choice or AI client not initialized.")
+
+        if not raw_response_text:
             raise HTTPException(status_code=500, detail="AI returned an empty response.")
 
-        # Quota update logic is temporarily skipped for Gemini for now
-        # You might still want to log usage for analytics, but not enforce limits.
-        # For now, we'll just update the last analysis date.
+        # Attempt to parse the response as JSON
+        try:
+            result = json.loads(raw_response_text)
+        except json.JSONDecodeError as e:
+            print(f"Failed to decode JSON from AI response: {e}")
+            print(f"Raw AI response: {raw_response_text}")
+            raise HTTPException(status_code=500, detail="AI returned an unparseable response.")
+
+        # This part should definitely stay for the /predict (Live Analysis) endpoint
         try:
             today_str = date.today().isoformat()
+            user_ref = db.collection("users").document(x_user_id)
             user_ref.set({
                 "lastAnalysisDate": today_str,
-                # Not updating geminiCountToday or gpt4oCountToday for now to ensure unlimited
+                # Not updating geminiCountToday or gpt4oCountToday here
+                # because `check_and_update_quota` already handles it.
             }, merge=True)
             print(f"Last analysis date updated for user {x_user_id}.")
         except Exception as e:
-            print(f"ERROR: Failed to update last analysis date in Firestore for {x_user_id}: {e}")
+            print(f"ERROR: Failed to update last analysis date in Firestore for {x_user_id} in /predict: {e}")
             import traceback
             print(traceback.format_exc())
-
 
         return result
 
@@ -238,7 +253,154 @@ Crucial Instructions:
     except Exception as e:
         import traceback
         print(f"Error in backend /predict: {e}\n{traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail=f"Internal Server Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Internal Server Error for live analysis: {str(e)}")
+    
+    current_plan = user_data.get("subscriptionPlan", "free") # Keep track of current plan for logging
+
+    # --- NEW LOGIC: Force Gemini Flash for all users, unlimited ---
+    model_to_use = "gemini"
+    print(f"User {x_user_id} (Plan: {current_plan}). Forcing unlimited Gemini Flash analysis.")
+    # No quota checks or OpenAI calls for now, directly proceed with Gemini
+    # --- END NEW LOGIC ---
+ # ✅ 7. NEW AI Chat Endpoint (for app/chat/page.tsx)
+@app.post("/chat-predict")
+async def chat_predict(
+    user_message: str = Body(None, description="The user's text message"),
+    file: UploadFile = File(None, description="Optional image/video file for analysis"),
+    x_user_id: str = Header(..., alias="X-User-ID")
+):
+    print(f"Received CHAT request for user: {x_user_id}. Message: '{user_message}', File: {file.filename if file else 'None'}")
+
+    if not db:
+        print("ERROR: Firestore client is not initialized. Cannot manage quotas.")
+        raise HTTPException(status_code=500, detail="Firestore not initialized. Cannot manage quotas.")
+
+    # We are not enforcing strict daily limits for chat for now,
+    # but the structure exists if you want to add it later.
+    # For now, Gemini Flash is considered "unlimited" for chat.
+    # If you want to apply quota, call check_and_update_quota here as well.
+
+    contents = []
+    if user_message:
+        contents.append(user_message)
+
+    if file:
+        try:
+            image_bytes = await file.read()
+            gemini_part = {
+                "mime_type": file.content_type,
+                "data": image_bytes
+            }
+            contents.append(gemini_part)
+            print(f"Attached file '{file.filename}' (Type: {file.content_type}) to chat prompt.")
+        except Exception as e:
+            print(f"Error reading uploaded file for chat: {e}")
+            raise HTTPException(status_code=400, detail=f"Failed to read uploaded file: {str(e)}")
+
+    if not contents:
+        raise HTTPException(status_code=400, detail="No message or file provided for chat.")
+
+    try:
+        # Determine if the content includes an image for structured analysis
+        has_image = any(isinstance(c, dict) and "mime_type" in c for c in contents)
+
+        if has_image:
+            # If an image is present, the prompt should be tailored for structured analysis
+            # Use the same detailed analysis prompt as /predict
+            analysis_prompt_for_chat = """
+You are a highly experienced, friendly, and encouraging AI skincare and makeup expert named WonderJoy AI. Your goal is to provide precise, actionable, and personalized feedback based on the user's selfie.
+
+Analyze the attached selfie for both skin health and makeup application. Provide your analysis as a JSON object with the following keys. Each field should contain concise, direct advice or observations.
+
+Expected JSON Structure:
+{
+  "hydration": "...",
+  "acne": "...",
+  "redness": "...",
+  "skin_tone": "...",
+  "makeup_coverage": "...",
+  "makeup_blend": "...",
+  "makeup_color_match": "...",
+  "overall_glow_score": number,
+  "skincare_advice_tips": [],
+  "makeup_enhancement_tips": [],
+  "overall_summary": "..."
+}
+
+Crucial Instructions:
+1.  **Output ONLY the JSON object.** Do not include any conversational text, markdown outside the JSON, or explanations before or after the JSON.
+2.  Be as specific as possible in `makeup_blend` and `makeup_color_match` feedback, noting *where* improvements are needed (e.g., "blend more around the nose," "foundation appears slightly too warm for your neck").
+3.  If no makeup is detected, state "no makeup detected" for relevant fields and provide general makeup enhancement tips.
+4.  For `skincare_advice_tips` and `makeup_enhancement_tips`, provide concise, actionable sentences.
+"""
+            # Prepend the analysis prompt to the contents for Gemini
+            final_contents = [analysis_prompt_for_chat] + contents
+            generation_config = {"response_mime_type": "application/json"}
+            response = gemini_model_chat.generate_content(
+                contents=final_contents,
+                generation_config=generation_config
+            )
+            raw_response_text = response.text
+            ai_response_type = "analysis_result"
+
+            if raw_response_text:
+                try:
+                    ai_response_data = json.loads(raw_response_text)
+                    print(f"AI chat response (image analysis) successfully parsed: {ai_response_data}")
+                except json.JSONDecodeError:
+                    print(f"AI chat response (image analysis) not direct JSON, attempting to extract from markdown. Raw: {raw_response_text[:200]}...")
+                    json_match = re.search(r"```json\n(.*)\n```", raw_response_text, re.DOTALL)
+                    if json_match:
+                        json_string = json_match.group(1)
+                        ai_response_data = json.loads(json_string)
+                        print(f"AI chat response (image analysis) extracted and parsed from markdown: {ai_response_data}")
+                    else:
+                        print(f"AI chat response (image analysis) not parsable as JSON. Raw text: {raw_response_text}")
+                        raise HTTPException(status_code=500, detail="AI did not return valid JSON for image analysis. Raw response: " + raw_response_text)
+            else:
+                print("AI chat response text is empty (image analysis).")
+                raise HTTPException(status_code=500, detail="AI returned an empty response for image analysis.")
+
+            return {
+                "type": ai_response_type,
+                "overall_summary": ai_response_data.get("overall_summary", "Here's your beauty analysis."),
+                "analysisData": ai_response_data # Store the full structured data
+            }
+
+        else: # Text-only chat
+            # This is the conversational prompt
+            chat_prompt_text_only = """
+You are WonderJoy AI, an encouraging and friendly AI skincare and makeup expert. You can answer questions about beauty, give advice, and discuss related topics.
+Engage in a helpful and conversational manner, answering their questions or offering general beauty advice.
+"""
+            final_contents = [chat_prompt_text_only, user_message]
+            generation_config = {} # No specific MIME type for general conversation
+            response = gemini_model_chat.generate_content(
+                contents=final_contents,
+                generation_config=generation_config
+            )
+            raw_response_text = response.text
+            ai_response_type = "text" # Default to text for conversational responses
+
+            if raw_response_text:
+                ai_response_data = {"message": raw_response_text}
+                print(f"AI chat response (text-only): {raw_response_text[:100]}...")
+            else:
+                print("AI chat response text is empty (text-only).")
+                raise HTTPException(status_code=500, detail="AI returned an empty response for text chat.")
+
+            return {
+                "type": ai_response_type,
+                "overall_summary": raw_response_text, # For frontend display, can be same as message
+                "message": raw_response_text # Actual conversational message
+            }
+
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        import traceback
+        print(f"Error in backend /chat-predict: {e}\n{traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"Internal Server Error for chat: {str(e)}")
 
         # NEW ENDPOINT: Create Paystack Payment Initiation
 # This endpoint handles initiating payments with Paystack.

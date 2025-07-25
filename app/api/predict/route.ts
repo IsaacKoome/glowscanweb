@@ -1,3 +1,5 @@
+//app/api/predict/route.ts
+
 import { NextResponse } from 'next/server';
 
 export const runtime = 'edge'; // Opt into Edge Runtime for faster responses
