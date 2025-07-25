@@ -22,6 +22,7 @@ import {
   query,
   orderBy,
   onSnapshot,
+  serverTimestamp,
   // doc, // REMOVED: No longer needed based on the previous error
 } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
@@ -80,7 +81,7 @@ export default function AiChatPage() {
 
     // Clean up listener on component unmount
     return () => unsubscribe();
-  }, [user, authLoading]); // Re-run if user or authLoading changes
+  }, [user, authLoading, userChatCollectionPath]); // Re-run if user or authLoading changes
 
   // --- Scroll to bottom on new messages ---
   useEffect(() => {
@@ -99,7 +100,7 @@ export default function AiChatPage() {
   // --- Handle user sending a message (text or media) ---
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || authLoading) {
+    if (!user || authLoading || !userChatCollectionPath) {
       alert("Please sign in to chat with WonderJoy AI.");
       return;
     }
@@ -112,6 +113,7 @@ export default function AiChatPage() {
     setIsProcessingAI(true); // Start AI processing indicator
 
     try {
+      // 1. Prepare and add user's message to firestore for immediate display
       const userMessagePayload: Omit<AIMessage, 'id'> = { // CHANGED: 'let' to 'const'
         sender: 'user',
         timestamp: Timestamp.now(),
@@ -139,85 +141,51 @@ export default function AiChatPage() {
       // Add user's message to Firestore
       // CHANGED: Removed 'const userMessageRef =' as it's not used
       await addDoc(collection(db, userChatCollectionPath!), userMessagePayload);
-      // The onSnapshot listener will update the state with this new message
+     
+      //2. Start Real AI integration
 
-      // --- Crucial: Trigger your AI Backend Here ---
-      // This part will depend on how your AI model is exposed.
-      // Option 1 (Recommended): Call a Firebase Cloud Function
-      // Example (conceptual):
-      // const aiResponse = await callFirebaseCloudFunction('analyzeBeauty', {
-      //   userId: user.uid,
-      //   // messageId: userMessageRef.id, // If you need this, you'd re-add userMessageRef
-      //   userQuery: userMessagePayload.content,
-      //   imageUrl: userMessagePayload.imageUrlForAnalysis,
-      //   videoUrl: userMessagePayload.mediaUrl, // If video analysis is a thing
-      // });
-      //
-      // If using Cloud Functions to directly write AI response back to Firestore,
-      // you might not need the simulated AI response below. The listener will pick it up.
-
-      // Option 2 (Direct API call - less secure for API keys):
-      // const response = await fetch('/api/wonderjoy-ai-analysis', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({
-      //     userId: user.uid,
-      //     query: userMessagePayload.content,
-      //     imageUrl: userMessagePayload.imageUrlForAnalysis,
-      //     videoUrl: userMessagePayload.mediaUrl,
-      //   }),
-      // });
-      // const aiResult = await response.json();
-
-
-      // --- SIMULATED AI RESPONSE (REPLACE WITH REAL AI CALL) ---
-      // This block simulates the AI processing and responding.
-      // In a real application, your AI backend (e.g., a Cloud Function)
-      // would compute this and then write the AI's message to Firestore.
-      // The `onSnapshot` listener would then pick up the AI's message.
-
-      // Simulate a delay for AI processing
-      await new Promise(resolve => setTimeout(resolve, 1500));
-
-      let aiResponseContent = "I'm processing your request...";
-      let aiResponseType: AIMessage['type'] = 'text';
-      let aiAnalysisData: any = null;
-
-      if (userMessagePayload.type === 'image' && userMessagePayload.imageUrlForAnalysis) {
-        // Simulate a longer delay for image analysis
-        await new Promise(resolve => setTimeout(resolve, 3000));
-
-        aiResponseType = 'analysis_result';
-        aiResponseContent = "Here's your personalized beauty analysis:";
-        aiAnalysisData = {
-          skinHealthScore: (Math.random() * (95 - 60) + 60).toFixed(0), // Random score between 60-95
-          acneSeverity: Math.random() < 0.3 ? "Severe" : (Math.random() < 0.6 ? "Moderate" : "Mild"),
-          rednessLevel: Math.random() < 0.4 ? "High" : "Low",
-          recommendations: [
-            "Maintain consistent hydration with a hyaluronic acid serum.",
-            "Incorporate a gentle exfoliating cleanser twice a week.",
-            "Ensure daily sun protection with a broad-spectrum SPF 50.",
-            "Consider a diet rich in antioxidants for skin vitality."
-          ],
-          visualHighlights: "Areas identified for attention: T-zone for oil control, cheeks for hydration.",
-          analyzedImage: userMessagePayload.imageUrlForAnalysis // Reference the image it analyzed
-        };
-
-      } else {
-        // Default text response
-        aiResponseContent = `Hello there! How can I help you achieve your beauty goals today?`;
+      const formData = new FormData();
+      //Append the actual file if selected
+      if(selectedImageFile) {
+        formData.append('file', selectedImageFile);
+      }
+      else if(selectedVideoFile){
+        //assuming your api/predict endpoint can handle video file
+        formData.append('file', selectedVideoFile);
       }
 
-      // Add AI's simulated response to Firestore
-      await addDoc(collection(db, userChatCollectionPath!), {
-        sender: 'ai',
-        timestamp: Timestamp.now(),
-        type: aiResponseType,
-        content: aiResponseContent,
-        analysisData: aiAnalysisData,
-      } as Omit<AIMessage, 'id'>);
+      //Append the user's current text message if present
+      if(currentMessageText.trim()) {
+        formData.append('user_message', currentMessageText.trim());
+      }
 
-      // END OF SIMULATED AI RESPONSE
+      //Make the Api call to you backend
+      const response = await fetch('api/predict', {
+        method: 'POST',
+        headers: {
+          //'content-type': 'multipart-formData' is not set for formData
+          'X-User-ID': user.uid, //User ID is available here due to initial check
+        },
+        body: formData
+      });
+
+      if(!response.ok) {
+        const errorText = await response.text();
+        throw new Error('API Error: ${response.status} - ${errorText}');
+      }
+
+      const aiResponseData = await response.json();  //Get AI response data
+
+      //3. Add actual AI's data to firestore
+      await addDoc(collection(db, userChatCollectionPath),{
+        sender: 'ai',
+        type: aiResponseData.type || 'analysis_result', //use type from AI, 
+        content: aiResponseData.overall_summary || aiResponseData.message || "An AI response was received.",
+        aiAnalysisData: aiResponseData, //store the full AI response
+        timestamp: Timestamp.now() //use server side Timestamp for AI responses
+        } as Omit<AIMessage, 'id'>);
+
+    // --- END: REAL AI INTEGRATION ---
 
       // Clear input and selections
       setCurrentMessageText('');
@@ -309,9 +277,7 @@ export default function AiChatPage() {
                 <div className="flex-shrink-0">
                   {/* AI Avatar */}
                   <Image
-                    // Try CDN first, fallback to local if offline
-                    
-                    src="/images/avatar.png"
+                    src="/wonderjoy-ai-avatar.png" // Path to your AI avatar image in /public
                     alt="WonderJoy AI"
                     width={32}
                     height={32}
@@ -510,4 +476,4 @@ export default function AiChatPage() {
         </form>
     </section>
   );
-}
+} 
