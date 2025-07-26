@@ -1,4 +1,3 @@
-// app/chat/page.tsx
 "use client";
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -47,7 +46,7 @@ import { useAuth } from '../../context/AuthContext';
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://glowscan-backend-241128138627.us-central1.run.app';
 
 
-export default function AiChatPage() {
+export default function AiChatPage( ) {
   const { user, loading: authLoading } = useAuth(); // Get user info from context
 
   const [messages, setMessages] = useState<AIMessage[]>([]);
@@ -164,16 +163,22 @@ export default function AiChatPage() {
       const response = await fetch(`${BACKEND_URL}/chat-predict`, {
         method: 'POST',
         headers: {
-          //'content-type': 'multipart-formData' is not set for formData
+          //'content-type': 'multipart/formData' is not set for formData
           'X-User-ID': user.uid, //User ID is available here due to initial check
         },
         body: formData
       });
 
-      if(!response.ok) {
-        const errorText = await response.text();
-        throw new Error('API Error: ${response.status} - ${errorText}');
-      }
+      // To this (using proper template literals):
+if(!response.ok) {
+  const errorText = await response.text();
+  try {
+    const errorJson = JSON.parse(errorText);
+    throw new Error(`API Error: ${response.status} - ${errorJson.detail || errorText}`);
+  } catch (e) {
+    throw new Error(`API Error: ${response.status} - ${errorText}`);
+  }
+}
 
       const aiResponseData = await response.json();  //Get AI response data
 
@@ -269,7 +274,8 @@ export default function AiChatPage() {
         {messages.length === 0 ? (
           <p className="text-gray-500 italic text-center py-8">
             Hello! Send a selfie or a message to start your beauty analysis.
-            <br />
+              
+
             (Or ask me anything about beauty!)
           </p>
         ) : (
@@ -481,4 +487,4 @@ export default function AiChatPage() {
         </form>
     </section>
   );
-} 
+}

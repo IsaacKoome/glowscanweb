@@ -28,7 +28,7 @@ origins = [
     "https://www.wonderjoyai.com",
     "https://wonderjoyai.com",
     "http://localhost:3000",
-    "https://glowscanweb-csosvq25f-isaac-koomes-projects.vercel.app",
+    "https://glowscanweb-git-recovery-from-mvp-isaac-koomes-projects.vercel.app"
 ]
 
 app.add_middleware(
