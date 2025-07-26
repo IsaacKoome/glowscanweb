@@ -21,7 +21,7 @@ from firebase_admin import credentials, firestore
 from firebase_admin import auth as firebase_auth
 
 # ✅ 1. Initialize FastAPI
-app = FastAPI()
+app = FastAPI( )
 
 # ✅ 2. Allow CORS for frontend
 origins = [
@@ -37,7 +37,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-)
+ )
 
 # ✅ 3. Configure AI APIs
 GOOGLE_API_KEY = os.getenv("GEMINI_API_KEY")
@@ -46,7 +46,11 @@ if GOOGLE_API_KEY:
 else:
     print("WARNING: GEMINI_API_KEY environment variable not set. This might cause issues.")
 
+# Initialize all Gemini models here for clarity
 gemini_model = GenerativeModel("gemini-1.5-flash")
+gemini_model_live_analysis = GenerativeModel("gemini-1.5-flash")
+gemini_model_chat = GenerativeModel("gemini-1.5-flash")
+
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 if OPENAI_API_KEY:
@@ -68,7 +72,7 @@ PAYSTACK_API_BASE_URL = "https://api.paystack.co"
 # ✅ 4. Initialize Firebase Admin SDK for Firestore
 db = None
 try:
-    print("Attempting to initialize Firebase Admin SDK...")
+    print("Attempting to initialize Firebase Admin SDK..." )
     if not firebase_admin._apps:
         cred = credentials.ApplicationDefault()
         firebase_admin.initialize_app(cred)
@@ -136,12 +140,13 @@ async def predict(
         raise HTTPException(status_code=500, detail="Firestore not initialized. Cannot manage quotas.")
 
     # Check and update quota
-    allowed = await check_and_update_quota(x_user_id, model_choice)
-    if not allowed:
-        raise HTTPException(
-            status_code=403,
-            detail=f"Quota exceeded for {model_choice} model. Upgrade to premium for unlimited access."
-        )
+    # This part is currently bypassed by the forced Gemini logic below, but kept for future use.
+    # allowed = await check_and_update_quota(x_user_id, model_choice)
+    # if not allowed:
+    #     raise HTTPException(
+    #         status_code=403,
+    #         detail=f"Quota exceeded for {model_choice} model. Upgrade to premium for unlimited access."
+    #     )
 
     try:
         image_bytes = await file.read()
@@ -182,44 +187,14 @@ Crucial Instructions:
         generation_config = {"response_mime_type": "application/json"}
 
         response = None
-        if model_choice == "gemini" and gemini_model_live_analysis:
-            print("Using Gemini for live analysis...")
-            response = gemini_model_live_analysis.generate_content(
-                contents=contents,
-                generation_config=generation_config
-            )
-            raw_response_text = response.text
-        elif model_choice == "gpt4o" and openai_client:
-            print("Using GPT-4o for live analysis...")
-            # For GPT-4o, the image needs to be base64 encoded or a URL
-            # For local files, we'll encode it
-            base64_image = base64.b64encode(image_bytes).decode('utf-8')
-            gpt_response = openai_client.chat.completions.create(
-                model="gpt-4o",
-                messages=[
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": prompt},
-                            {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
-                        ]
-                    }
-                ],
-                response_model=None, # GPT-4o doesn't have a direct JSON response_mime_type like Gemini
-                max_tokens=2000,
-            )
-            raw_response_text = gpt_response.choices[0].message.content
-            # GPT-4o often wraps JSON in markdown, so we'll need to extract
-            json_match = re.search(r"```json\n(.*)\n```", raw_response_text, re.DOTALL)
-            if json_match:
-                raw_response_text = json_match.group(1)
-            else:
-                # If no markdown, assume it's direct JSON or log an error
-                print(f"GPT-4o response did not contain JSON in markdown format. Raw: {raw_response_text[:200]}...")
-                # Handle this case: raise error or attempt direct parse
-        else:
-            raise HTTPException(status_code=400, detail="Invalid model choice or AI client not initialized.")
-
+        # --- LOGIC SIMPLIFIED: Always use Gemini for now ---
+        print("Using Gemini for live analysis...")
+        response = gemini_model_live_analysis.generate_content(
+            contents=contents,
+            generation_config=generation_config
+        )
+        raw_response_text = response.text
+        
         if not raw_response_text:
             raise HTTPException(status_code=500, detail="AI returned an empty response.")
 
@@ -237,8 +212,6 @@ Crucial Instructions:
             user_ref = db.collection("users").document(x_user_id)
             user_ref.set({
                 "lastAnalysisDate": today_str,
-                # Not updating geminiCountToday or gpt4oCountToday here
-                # because `check_and_update_quota` already handles it.
             }, merge=True)
             print(f"Last analysis date updated for user {x_user_id}.")
         except Exception as e:
@@ -255,14 +228,12 @@ Crucial Instructions:
         print(f"Error in backend /predict: {e}\n{traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"Internal Server Error for live analysis: {str(e)}")
     
-    current_plan = user_data.get("subscriptionPlan", "free") # Keep track of current plan for logging
+    # --- START FIX: REMOVED UNREACHABLE CODE THAT WAS HERE ---
+    # The lines below were outside the try/except block and after the 'return' statement,
+    # making them unreachable and causing confusion. They have been removed.
+    # --- END FIX ---
 
-    # --- NEW LOGIC: Force Gemini Flash for all users, unlimited ---
-    model_to_use = "gemini"
-    print(f"User {x_user_id} (Plan: {current_plan}). Forcing unlimited Gemini Flash analysis.")
-    # No quota checks or OpenAI calls for now, directly proceed with Gemini
-    # --- END NEW LOGIC ---
- # ✅ 7. NEW AI Chat Endpoint (for app/chat/page.tsx)
+# ✅ 7. NEW AI Chat Endpoint (for app/chat/page.tsx)
 @app.post("/chat-predict")
 async def chat_predict(
     user_message: str = Body(None, description="The user's text message"),
@@ -274,11 +245,6 @@ async def chat_predict(
     if not db:
         print("ERROR: Firestore client is not initialized. Cannot manage quotas.")
         raise HTTPException(status_code=500, detail="Firestore not initialized. Cannot manage quotas.")
-
-    # We are not enforcing strict daily limits for chat for now,
-    # but the structure exists if you want to add it later.
-    # For now, Gemini Flash is considered "unlimited" for chat.
-    # If you want to apply quota, call check_and_update_quota here as well.
 
     contents = []
     if user_message:
@@ -402,10 +368,8 @@ Engage in a helpful and conversational manner, answering their questions or offe
         print(f"Error in backend /chat-predict: {e}\n{traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"Internal Server Error for chat: {str(e)}")
 
-        # NEW ENDPOINT: Create Paystack Payment Initiation
-# This endpoint handles initiating payments with Paystack.
-# It receives the selected planId and userEmail from the frontend.
-# It communicates with Paystack to get a checkout URL and returns it to the frontend.
+# ... (The rest of your file remains the same) ...
+# The Paystack and webhook endpoints are unchanged.
 @app.post("/create-paystack-payment")
 async def create_paystack_payment(request: Request, x_user_id: str = Header(..., alias="X-User-ID")):
     data = await request.json()
@@ -432,7 +396,7 @@ async def create_paystack_payment(request: Request, x_user_id: str = Header(...,
     amount_in_cents = plan_info["amount_cents"] # Assuming this is correctly set for KES or USD cents
 
     try:
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient( ) as client:
             print(f"Initiating Paystack transaction for user {x_user_id}, plan {plan_id}...")
             response = await client.post(
                 f"{PAYSTACK_API_BASE_URL}/transaction/initialize",
@@ -454,7 +418,7 @@ async def create_paystack_payment(request: Request, x_user_id: str = Header(...,
                     # It's crucial for your frontend to handle this redirect and verify the payment.
                     "callback_url": f"https://www.wonderjoyai.com/payment-status?tx_ref={tx_ref}&status=callback&planId={plan_id}&userId={x_user_id}"
                 }
-            )
+             )
             response.raise_for_status() # Raise an exception for HTTP errors (4xx or 5xx)
             
             paystack_response = response.json()
@@ -469,7 +433,7 @@ async def create_paystack_payment(request: Request, x_user_id: str = Header(...,
                 raise HTTPException(status_code=500, detail=f"Paystack initiation failed: {paystack_response.get('message', 'Unknown error')}")
 
     except httpx.HTTPStatusError as e:
-        # Catch HTTP errors from Paystack API (e.g., 400 Bad Request, 401 Unauthorized)
+        # Catch HTTP errors from Paystack API (e.g., 400 Bad Request, 401 Unauthorized )
         print(f"HTTP error from Paystack: {e.response.status_code} - {e.response.text}")
         try:
             error_detail = e.response.json().get('message', 'Unknown HTTP error from Paystack.')
@@ -522,8 +486,8 @@ async def cancel_subscription(request: Request): # Changed to async def
 
     # Now cancel using Paystack API
     try:
-        async with httpx.AsyncClient() as client: # Use httpx.AsyncClient for async
-            print(f"🚀 Attempting to disable subscription {subscription_code} via Paystack API.") # Added logging
+        async with httpx.AsyncClient( ) as client: # Use httpx.AsyncClient for async
+            print(f"🚀 Attempting to disable subscription {subscription_code} via Paystack API." ) # Added logging
             response = await client.post( # Use await with client.post
                 "https://api.paystack.co/subscription/disable",
                 headers={
@@ -536,7 +500,7 @@ async def cancel_subscription(request: Request): # Changed to async def
                                         # It's more for enabling or managing specific authorization tokens.
                                         # Removing it to align with standard Paystack disable API usage.
                 }
-            )
+             )
             response.raise_for_status() # Raise for bad status codes (4xx or 5xx)
             paystack_response_data = response.json()
             print(f"✅ Paystack disable response: {paystack_response_data}") # Added logging
@@ -552,7 +516,7 @@ async def cancel_subscription(request: Request): # Changed to async def
         return {"status": "success", "message": "Subscription cancelled and user downgraded to Free."}
 
     except httpx.HTTPStatusError as e:
-        print(f"❌ Paystack API error during cancellation for user {user_id}: {e.response.status_code} - {e.response.text}")
+        print(f"❌ Paystack API error during cancellation for user {user_id}: {e.response.status_code} - {e.response.text}" )
         try:
             error_detail = e.response.json().get('message', 'Unknown error from Paystack.')
         except json.JSONDecodeError:
@@ -642,6 +606,7 @@ async def paystack_webhook(request: Request): # Removed raw_body parameter
         
         print(f"Paystack subscription event: {event_type} for customer: {customer_code}, status: {subscription_status_from_webhook}, plan: {plan_code}, subscription_code: {subscription_code_from_webhook}")
         print(f"Full subscription_data from webhook: {json.dumps(subscription_data, indent=2)}") # Added for full payload inspection
+                    
 
         if customer_code and db:
             users_ref = db.collection("users")
