@@ -119,7 +119,7 @@ export default function AiChatPage( ) {
         timestamp: Timestamp.now(),
         type: 'text',
         content: currentMessageText.trim(),
-        senderPhotoURL: user.photoURL || '/default-avatar.png',
+        senderPhotoURL: user.photoURL || 'images/default-avatar.png', //fallback to a default avatar
       };
 
       if (selectedImageFile) {
@@ -288,7 +288,7 @@ if(!response.ok) {
                 <div className="flex-shrink-0">
                   {/* AI Avatar */}
                   <Image
-                    src="/wonderjoy-ai-avatar.png" // Path to your AI avatar image in /public
+                    src="images/wonderjoy-ai-avatar.png" // Path to your AI avatar image in /public
                     alt="WonderJoy AI"
                     width={32}
                     height={32}
@@ -378,7 +378,7 @@ if(!response.ok) {
                 <div className="flex-shrink-0">
                   {/* User Avatar */}
                   <Image
-                    src={user?.photoURL || '/default-avatar.png'} // Use user's actual photoURL from AuthContext
+                    src={user?.photoURL || 'images/default-avatar.png'} // Use user's actual photoURL from AuthContext
                     alt={user?.displayName || "You"}
                     width={32}
                     height={32}
@@ -393,7 +393,7 @@ if(!response.ok) {
         {isProcessingAI && (
           <div className="flex justify-start items-center gap-3 mb-4">
             <Image
-              src="/wonderjoy-ai-avatar.png" // Your AI avatar
+              src="images/wonderjoy-ai-avatar.png" // Your AI avatar
               alt="WonderJoy AI"
               width={32}
               height={32}

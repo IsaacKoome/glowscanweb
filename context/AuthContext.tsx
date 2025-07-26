@@ -1,3 +1,4 @@
+// context/AuthContext.tsx
 'use client';
 
 import React, {
@@ -33,9 +34,12 @@ import { useRouter } from 'next/navigation';
 
 const db: Firestore = getFirestore(auth.app as FirebaseApp);
 
+// --- START FIX 1: Update UserData interface ---
 interface UserData {
   uid: string;
   email: string | null;
+  displayName: string | null; // Added displayName
+  photoURL: string | null;    // Added photoURL
   subscriptionPlan: string;
   geminiCountToday: number;
   gpt4oCountToday: number;
@@ -46,6 +50,7 @@ interface UserData {
   paystackSubscriptionCode?: string;
   [key: string]: any;
 }
+// --- END FIX 1 ---
 
 interface AuthContextType {
   user: UserData | null;
@@ -75,9 +80,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (docSnap.exists()) {
           const data = docSnap.data();
 
+          // --- START FIX 2: Enrich user data with photoURL and displayName ---
           const updatedUserData: UserData = {
             uid: firebaseUser.uid,
             email: firebaseUser.email,
+            displayName: firebaseUser.displayName, // Get from Firebase Auth
+            photoURL: firebaseUser.photoURL,       // Get from Firebase Auth
             ...data,
             subscriptionPlan: data?.subscriptionPlan || 'free',
             geminiCountToday: data?.geminiCountToday ?? 0,
@@ -88,6 +96,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             paystackLastTxRef: data?.paystackLastTxRef ?? undefined,
             paystackSubscriptionCode: data?.paystackSubscriptionCode ?? undefined,
           };
+          // --- END FIX 2 ---
 
           if (isMountedRef.current) {
             setUser(updatedUserData);
@@ -95,14 +104,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
         } else {
           console.log(`AuthContext: User document for ${firebaseUser.uid} does not exist. Creating default.`);
+          // --- START FIX 3: Add displayName and photoURL for new users ---
           const newUserData: UserData = {
             uid: firebaseUser.uid,
             email: firebaseUser.email,
+            displayName: firebaseUser.displayName, // Add for new user
+            photoURL: firebaseUser.photoURL,       // Add for new user
             subscriptionPlan: 'free',
             geminiCountToday: 0,
             gpt4oCountToday: 0,
             lastAnalysisDate: new Date().toISOString().split('T')[0],
           };
+          // --- END FIX 3 ---
 
           setDoc(userDocRef, newUserData, { merge: true })
             .then(() => {
