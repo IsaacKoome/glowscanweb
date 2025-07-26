@@ -75,6 +75,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const setupUserListener = useCallback((firebaseUser: FirebaseUser) => {
     const userDocRef: DocumentReference = doc(db, 'users', firebaseUser.uid);
 
+        // --- START: THE CRITICAL FIX ---
+    // Every time a user logs in, we'll ensure their Firestore profile is up-to-date
+    // with the latest info from their auth provider (e.g., Google).
+    const profileDataToSync = {
+      displayName: firebaseUser.displayName,
+      photoURL: firebaseUser.photoURL,
+      email: firebaseUser.email, // Also good to keep the email in sync
+    };
+
+    // Use setDoc with merge: true. This creates the doc if it doesn't exist,
+    // or updates it if it does, without overwriting other fields.
+    setDoc(userDocRef, profileDataToSync, { merge: true })
+      .then(() => {
+        console.log(`AuthContext: User profile synced with Firestore for ${firebaseUser.uid}`);
+      })
+      .catch(error => {
+        console.error("AuthContext: Error syncing user profile to Firestore:", error);
+      });
+    // --- END: THE CRITICAL FIX ---
+
     console.log(`AuthContext: Setting up onSnapshot listener for user ${firebaseUser.uid}`);
 
     const unsubscribe = onSnapshot(
