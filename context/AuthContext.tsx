@@ -16,6 +16,8 @@ import {
   onAuthStateChanged,
   signOut as firebaseSignOut,
   signInAnonymously,
+  GoogleAuthProvider,
+  signInWithPopup,
 } from 'firebase/auth';
 
 import {
@@ -57,6 +59,7 @@ interface AuthContextType {
   loading: boolean;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  signInWithGoogle: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -148,6 +151,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     unsubscribeFirestoreRef.current = unsubscribe;
     return unsubscribe;
   }, []);
+  //Implementing signInwithGoogle function
+
+  const signInWithGoogle = useCallback(async () => {
+    const provider = new GoogleAuthProvider();
+    try {
+      await signInWithPopup(auth, provider);
+      //on AuthStateChanged will handle the rest detecting new user
+      //setting up the listener and updating the state
+      router.push('/'); //redirect to homepage after succesful sign in
+    } catch (error) {
+      console.error("Error during Google sign-in:", error);
+      //you could add user facing error if desired
+    }
+
+  }, [router]);
+
 
   const refreshUser = useCallback(async () => {
     console.log('AuthContext: refreshUser called. Triggering auth state re-evaluation.');
@@ -236,7 +255,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [setupUserListener]); // Removed router and user from dependencies
 
   return (
-    <AuthContext.Provider value={{ user, loading, logout, refreshUser }}>
+    <AuthContext.Provider value={{ user, loading, logout, refreshUser, signInWithGoogle }}>
       {children}
     </AuthContext.Provider>
   );

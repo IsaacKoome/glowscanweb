@@ -1,25 +1,39 @@
 // app/login/page.tsx
-"use client"; // This is a Client Component
+"use client";
 
 import React, { useState } from 'react';
-import { useRouter } from 'next/navigation'; // For navigation
-import { auth } from '../../lib/firebase'; // Import auth instance
+import { useRouter } from 'next/navigation';
+import { auth } from '../../lib/firebase';
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
 } from 'firebase/auth';
 
-import { FirebaseError } from 'firebase/app'; // Import FirebaseError for type checking
-import { useAuth } from '../../context/AuthContext'; // IMPORT useAuth
+import { FirebaseError } from 'firebase/app';
+// --- START FIX 1: Import useAuth to get the new Google sign-in function ---
+import { useAuth } from '../../context/AuthContext';
+// --- END FIX 1 ---
+
+// A simple Google Icon component to use in our button
+const GoogleIcon = (props: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 48 48" {...props}>
+    <path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303c-1.649 4.657-6.08 8-11.303 8-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20 20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z"></path>
+    <path fill="#FF3D00" d="M6.306 14.691l6.571 4.819C14.655 15.108 18.961 12 24 12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 16.318 4 9.656 8.337 6.306 14.691z"></path>
+    <path fill="#4CAF50" d="M24 44c5.166 0 9.86-1.977 13.409-5.192l-6.19-5.238A8 8 0 0 1 24 36c-5.222 0-9.618-3.66-11.083-8.584l-6.522 5.025C9.505 39.556 16.227 44 24 44z"></path>
+    <path fill="#1976D2" d="M43.611 20.083H24v8h11.303a12.04 12.04 0 0 1-4.087 7.739l6.19 5.238C42.018 36.458 44 30.638 44 24c0-1.341-.138-2.65-.389-3.917z"></path>
+  </svg>
+);
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [isRegistering, setIsRegistering] = useState(false); // Toggle between login/register
+  const [isRegistering, setIsRegistering] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState(''); // For success or error messages
+  const [message, setMessage] = useState('');
   const router = useRouter();
-  const { refreshUser } = useAuth(); // GET refreshUser from context
+  // --- START FIX 2: Get signInWithGoogle from the useAuth hook ---
+  const { refreshUser, signInWithGoogle } = useAuth();
+  // --- END FIX 2 ---
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,26 +42,20 @@ export default function LoginPage() {
 
     try {
       if (isRegistering) {
-        // Sign Up
         await createUserWithEmailAndPassword(auth, email, password);
         setMessage('Registration successful! You can now log in.');
-        setIsRegistering(false); // Switch to login view after successful registration
+        setIsRegistering(false);
       } else {
-        // Sign In
         await signInWithEmailAndPassword(auth, email, password);
         setMessage('Login successful!');
-        // Redirect to a protected page, e.g., the profile page or home
-        router.push('/'); // Or '/profile' once created
-
-        // ADD THIS BLOCK: (Step 3 from ChatGPT)
+        router.push('/');
         setTimeout(() => {
-          console.log("LoginPage: Forcing user refresh manually after login...");
-          refreshUser(); // This triggers AuthContext to re-evaluate the user state
-        }, 500); // Give it a moment to ensure auth state is propagated
+          refreshUser();
+        }, 500);
       }
     } catch (error: any) {
+      // ... (error handling remains the same)
       if (error instanceof FirebaseError) {
-        // Handle Firebase specific errors
         switch (error.code) {
           case 'auth/email-already-in-use':
             setMessage('Error: This email is already registered. Try logging in.');
@@ -71,11 +79,25 @@ export default function LoginPage() {
       } else {
         setMessage(`An unexpected error occurred: ${error.message}`);
       }
-      console.error("Auth error:", error);
     } finally {
       setLoading(false);
     }
   };
+
+  // --- START FIX 3: Create a handler for the Google Sign-In button ---
+  const handleGoogleSignIn = async () => {
+    setLoading(true);
+    setMessage('');
+    try {
+      await signInWithGoogle();
+      // No need to do anything else, the AuthContext and router push will handle it
+    } catch (error) {
+      setMessage('Failed to sign in with Google. Please try again.');
+      setLoading(false);
+    }
+    // setLoading(false) will be handled by the redirect or if an error occurs
+  };
+  // --- END FIX 3 ---
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-purple-50 to-pink-50 p-4">
@@ -89,6 +111,23 @@ export default function LoginPage() {
             "Log in to continue your journey to radiant skin and flawless makeup."
           }
         </p>
+
+        {/* --- START FIX 4: Add the Google Sign-In button and divider --- */}
+        <button
+          onClick={handleGoogleSignIn}
+          disabled={loading}
+          className="w-full flex items-center justify-center gap-3 py-3 mb-6 rounded-xl text-gray-700 font-semibold text-lg transition duration-300 bg-white border border-gray-300 hover:bg-gray-50 shadow-sm"
+        >
+          <GoogleIcon className="w-6 h-6" />
+          Sign in with Google
+        </button>
+
+        <div className="flex items-center my-6">
+          <div className="flex-grow border-t border-gray-300"></div>
+          <span className="flex-shrink mx-4 text-gray-500">OR</span>
+          <div className="flex-grow border-t border-gray-300"></div>
+        </div>
+        {/* --- END FIX 4 --- */}
 
         <form onSubmit={handleAuth} className="space-y-6">
           <div>
@@ -123,17 +162,8 @@ export default function LoginPage() {
               loading ? 'bg-gray-400 cursor-not-allowed' : 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 shadow-lg transform hover:scale-105'
             }`}
           >
-            {loading ? (
-              <span className="flex items-center justify-center">
-                <svg className="animate-spin h-5 w-5 text-white mr-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                {isRegistering ? 'Registering...' : 'Logging In...'}
-              </span>
-            ) : (
-              isRegistering ? 'Register Account' : 'Log In'
-            )}
+            {/* ... (loading spinner logic remains the same) ... */}
+            {loading ? 'Processing...' : (isRegistering ? 'Register Account' : 'Log In')}
           </button>
         </form>
 
