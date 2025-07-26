@@ -296,7 +296,21 @@ if(!response.ok) {
                   />
                 </div>
               )}
-
+            {msg.sender === 'user' && (
+              <div className="flex-shrink-0">
+                {/* --- START FIX 2: Render the avatar using the URL from the message itself --- */}
+                <Image
+                  // Use the 'senderPhotoURL' from the specific message object 'msg'.
+                  // This ensures that even if the user changes their avatar later, old messages still show the old avatar.
+                  src={msg.senderPhotoURL || '/images/default-avatar.png'}
+                  alt={user?.displayName || "You"}
+                  width={32}
+                  height={32}
+                  className="rounded-full object-cover border-2 border-purple-400"
+                />
+                {/* --- END FIX 2 --- */}
+              </div>
+            )}
               <div className={`flex flex-col max-w-[75%] p-3 rounded-xl shadow-sm relative group ${
                 msg.sender === 'user'
                   ? 'bg-purple-600 text-white rounded-br-none'
