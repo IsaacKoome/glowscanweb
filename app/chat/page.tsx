@@ -1,17 +1,19 @@
+//app/chat/page.tsx
+
 "use client";
 
 import React, { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
-import Link from 'next/link'; // Make sure Link is imported for the login button
-import { Button } from "@/components/ui/button"; // Assuming you have this Button component
-import { Input } from "@/components/ui/input";   // Assuming you have this Input component
+import Link from 'next/link';
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
-  SparklesIcon, // For AI specific messages/actions
+  SparklesIcon,
   SendIcon,
   Loader2,
   ImageIcon,
-  VideoIcon // If you decide to support video analysis/upload
-} from "lucide-react"; // Or from @heroicons/react if you prefer consistency
+  VideoIcon
+} from "lucide-react";
 
 // Firebase imports
 import {
@@ -21,23 +23,23 @@ import {
   query,
   orderBy,
   onSnapshot,
-  // doc, // REMOVED: No longer needed based on the previous error
 } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { db, storage } from "@/lib/firebase"; // Your Firebase config
-import { v4 as uuidv4 } from "uuid"; // For generating unique IDs for uploads
+import { db, storage } from "@/lib/firebase";
+import { getAuth, signInAnonymously, User as FirebaseAuthUser } from "firebase/auth"; // Import getAuth and signInAnonymously
+import { v4 as uuidv4 } from "uuid";
 
 // Define interfaces for your AI chat messages
 interface AIMessage {
   id: string;
-  sender: 'user' | 'ai'; // 'user' for user messages, 'ai' for AI responses
-  timestamp: Timestamp; // Using Firestore Timestamp
-  type: 'text' | 'image' | 'video' | 'analysis_result'; // 'analysis_result' is a new type for structured AI output
-  content?: string;     // For text messages or AI summaries
-  mediaUrl?: string;    // For user-uploaded images/videos, or AI-generated images
-  analysisData?: any;   // For structured AI analysis results (e.g., skin health score, recommendations)
-  imageUrlForAnalysis?: string; // The URL of the image the AI is analyzing (sent by user)
-  senderPhotoURL?: string; // For user's avatar
+  sender: 'user' | 'ai';
+  timestamp: Timestamp;
+  type: 'text' | 'image' | 'video' | 'analysis_result';
+  content?: string;
+  mediaUrl?: string;
+  analysisData?: any;
+  imageUrlForAnalysis?: string;
+  senderPhotoURL?: string;
 }
 
 // Assuming you still have your AuthContext
@@ -45,10 +47,9 @@ import { useAuth } from '../../context/AuthContext';
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://glowscan-backend-241128138627.us-central1.run.app';
 
-
-export default function AiChatPage( ) {
+export default function AiChatPage() {
   const { user, loading: authLoading } = useAuth(); // Get user info from context
-
+  const [anonymousUser, setAnonymousUser] = useState<FirebaseAuthUser | null>(null);
   const [messages, setMessages] = useState<AIMessage[]>([]);
   const [currentMessageText, setCurrentMessageText] = useState<string>('');
   const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
@@ -56,15 +57,35 @@ export default function AiChatPage( ) {
   const [isProcessingAI, setIsProcessingAI] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // Determine the active user (authenticated or anonymous)
+  const activeUser = user || anonymousUser;
+
   // Firestore path for user's chat messages
-  const userChatCollectionPath = user ? `chats/${user.uid}/messages` : null;
+  const userChatCollectionPath = activeUser ? `chats/${activeUser.uid}/messages` : null;
+
+  // --- Anonymous Sign-in Effect ---
+  useEffect(() => {
+    const auth = getAuth();
+    if (!user && !authLoading) { // Only try to sign in anonymously if no authenticated user and not still loading auth
+      signInAnonymously(auth)
+        .then((userCredential) => {
+          setAnonymousUser(userCredential.user);
+          console.log("Signed in anonymously:", userCredential.user.uid);
+        })
+        .catch((error) => {
+          console.error("Error signing in anonymously:", error);
+          // Handle error, e.g., show a message to the user
+        });
+    }
+  }, [user, authLoading]); // Re-run if user or authLoading changes
 
   // --- Real-time listener for chat messages ---
   useEffect(() => {
-    if (!user || authLoading) return; // Don't listen if user not logged in or still loading
+    // Listen to messages for the active user (either authenticated or anonymous)
+    if (!activeUser || authLoading) return;
 
     const q = query(
-      collection(db, `chats/${user.uid}/messages`),
+      collection(db, `chats/${activeUser.uid}/messages`),
       orderBy("timestamp", "asc")
     );
 
@@ -76,23 +97,20 @@ export default function AiChatPage( ) {
       setMessages(fetchedMessages);
     }, (error) => {
       console.error("Error fetching chat messages:", error);
-      // Optionally show an error to the user
     });
 
-    // Clean up listener on component unmount
     return () => unsubscribe();
-  }, [user, authLoading, userChatCollectionPath]); // Re-run if user or authLoading changes
+  }, [activeUser, authLoading]);
 
   // --- Scroll to bottom on new messages ---
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-
   // --- Helper to upload files to Firebase Storage ---
   const uploadFileToStorage = async (file: File, folder: string): Promise<string> => {
-    if (!user) throw new Error("User not authenticated for upload.");
-    const fileRef = ref(storage, `${folder}/${user.uid}/${uuidv4()}-${file.name}`);
+    if (!activeUser) throw new Error("User not authenticated for upload.");
+    const fileRef = ref(storage, `${folder}/${activeUser.uid}/${uuidv4()}-${file.name}`);
     const snapshot = await uploadBytes(fileRef, file);
     return getDownloadURL(snapshot.ref);
   };
@@ -100,8 +118,9 @@ export default function AiChatPage( ) {
   // --- Handle user sending a message (text or media) ---
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || authLoading || !userChatCollectionPath) {
-      alert("Please sign in to chat with WonderJoy AI.");
+    if (!activeUser || authLoading || !userChatCollectionPath) {
+      // This should ideally not happen if anonymous sign-in works, but good for a fallback.
+      alert("Something went wrong with authentication. Please try again.");
       return;
     }
 
@@ -114,88 +133,73 @@ export default function AiChatPage( ) {
 
     try {
       // 1. Prepare and add user's message to firestore for immediate display
-      const userMessagePayload: Omit<AIMessage, 'id'> = { // CHANGED: 'let' to 'const'
+      const userMessagePayload: Omit<AIMessage, 'id'> = {
         sender: 'user',
         timestamp: Timestamp.now(),
         type: 'text',
         content: currentMessageText.trim(),
-        senderPhotoURL: user.photoURL || 'images/default-avatar.png', //fallback to a default avatar
+        senderPhotoURL: activeUser.photoURL || 'images/default-avatar.png',
       };
 
       if (selectedImageFile) {
         userMessagePayload.type = 'image';
-        // Upload image to Firebase Storage
         const imageUrl = await uploadFileToStorage(selectedImageFile, 'wonderjoy_chat_images');
         userMessagePayload.mediaUrl = imageUrl;
-        userMessagePayload.imageUrlForAnalysis = imageUrl; // This is the image URL the AI will analyze
-        userMessagePayload.content = currentMessageText.trim() || 'Image for analysis'; // Allow caption
+        userMessagePayload.imageUrlForAnalysis = imageUrl;
+        userMessagePayload.content = currentMessageText.trim() || 'Image for analysis';
       } else if (selectedVideoFile) {
         userMessagePayload.type = 'video';
-        // Upload video to Firebase Storage
         const videoUrl = await uploadFileToStorage(selectedVideoFile, 'wonderjoy_chat_videos');
         userMessagePayload.mediaUrl = videoUrl;
-        userMessagePayload.imageUrlForAnalysis = videoUrl; // If AI analyzes video frames, use this
-        userMessagePayload.content = currentMessageText.trim() || 'Video for analysis'; // Allow caption
+        userMessagePayload.imageUrlForAnalysis = videoUrl;
+        userMessagePayload.content = currentMessageText.trim() || 'Video for analysis';
       }
 
-      // Add user's message to Firestore
-      // CHANGED: Removed 'const userMessageRef =' as it's not used
       await addDoc(collection(db, userChatCollectionPath!), userMessagePayload);
-     
-      //2. Start Real AI integration
 
+      // 2. Start Real AI integration
       const formData = new FormData();
-      //Append the actual file if selected
-      if(selectedImageFile) {
+      if (selectedImageFile) {
         formData.append('file', selectedImageFile);
-      }
-      else if(selectedVideoFile){
-        //assuming your api/predict endpoint can handle video file
+      } else if (selectedVideoFile) {
         formData.append('file', selectedVideoFile);
       }
 
-      //Append the user's current text message if present
-      if(currentMessageText.trim()) {
+      if (currentMessageText.trim()) {
         formData.append('user_message', currentMessageText.trim());
       }
 
-      //Make the Api call to you backend
       const response = await fetch(`${BACKEND_URL}/chat-predict`, {
         method: 'POST',
         headers: {
-          //'content-type': 'multipart/formData' is not set for formData
-          'X-User-ID': user.uid, //User ID is available here due to initial check
+          'X-User-ID': activeUser.uid,
         },
         body: formData
       });
 
-      // To this (using proper template literals):
-if(!response.ok) {
-  const errorText = await response.text();
-  try {
-    const errorJson = JSON.parse(errorText);
-    throw new Error(`API Error: ${response.status} - ${errorJson.detail || errorText}`);
-  } catch (e) {
-    throw new Error(`API Error: ${response.status} - ${errorText}`);
-  }
-}
+      if (!response.ok) {
+        const errorText = await response.text();
+        try {
+          const errorJson = JSON.parse(errorText);
+          throw new Error(`API Error: ${response.status} - ${errorJson.detail || errorText}`);
+        } catch (e) {
+          throw new Error(`API Error: ${response.status} - ${errorText}`);
+        }
+      }
 
-      const aiResponseData = await response.json();  //Get AI response data
+      const aiResponseData = await response.json();
 
-      // Determine the content based on whether it's analysis or text
       const aiContent = aiResponseData.type === 'analysis_result' ?
-                    aiResponseData.overall_summary || "Here's your analysis." :
-                    aiResponseData.message || "An AI response was received.";
+        aiResponseData.overall_summary || "Here's your analysis." :
+        aiResponseData.message || "An AI response was received.";
 
-              await addDoc(collection(db, userChatCollectionPath!), {
-              sender: 'ai',
-              type: aiResponseData.type || 'text', // Use type from AI, default to 'text'
-              content: aiContent,
-              analysisData: aiResponseData.analysisData || null, // Store full analysisData if available
-              timestamp: Timestamp.now()
-              } as Omit<AIMessage, 'id'>);
-
-    // --- END: REAL AI INTEGRATION ---
+      await addDoc(collection(db, userChatCollectionPath!), {
+        sender: 'ai',
+        type: aiResponseData.type || 'text',
+        content: aiContent,
+        analysisData: aiResponseData.analysisData || null,
+        timestamp: Timestamp.now()
+      } as Omit<AIMessage, 'id'>);
 
       // Clear input and selections
       setCurrentMessageText('');
@@ -217,8 +221,7 @@ if(!response.ok) {
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       setSelectedImageFile(e.target.files[0]);
-      setSelectedVideoFile(null); // Clear video if image is selected
-      // setCurrentMessageText(''); // Keep text if user wants to add caption
+      setSelectedVideoFile(null);
       (document.getElementById('chatVideoUpload') as HTMLInputElement).value = '';
     } else {
       setSelectedImageFile(null);
@@ -228,31 +231,33 @@ if(!response.ok) {
   const handleVideoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       setSelectedVideoFile(e.target.files[0]);
-      setSelectedImageFile(null); // Clear image if video is selected
-      // setCurrentMessageText(''); // Keep text if user wants to add caption
+      setSelectedImageFile(null);
       (document.getElementById('chatImageUpload') as HTMLInputElement).value = '';
     } else {
       setSelectedVideoFile(null);
     }
   };
 
-  if (authLoading) {
+  // Display loading for both regular auth and anonymous auth attempts
+  if (authLoading || (!activeUser && !anonymousUser)) { // Check for activeUser or anonymousUser to be set
     return (
       <div className="flex justify-center items-center min-h-[80vh] text-purple-700">
         <Loader2 className="h-10 w-10 animate-spin mr-3" />
-        <p className="text-xl">Loading chat...</p>
+        <p className="text-xl">Initializing WonderJoy AI...</p>
       </div>
     );
   }
 
-  // If user is not logged in after authLoading, prompt them to sign in
-  if (!user) {
+  // If user is neither logged in nor an anonymous user is successfully created,
+  // there might be a problem with anonymous sign-in, or it's still in progress.
+  // We keep the "Login / Register" prompt but it should be less likely to show now.
+  if (!activeUser) {
     return (
       <div className="max-w-4xl mx-auto p-8 bg-white rounded-2xl shadow-xl border border-gray-100 mt-8 mb-8 text-center">
         <SparklesIcon className="w-16 h-16 mx-auto text-purple-600 mb-4" />
         <h2 className="text-3xl font-bold text-purple-700 mb-4">Welcome to WonderJoy AI Analyst!</h2>
         <p className="text-lg text-gray-700 mb-6">
-          Please sign in to start your personalized beauty analysis and chat with our AI.
+          There was an issue starting your anonymous session. Please sign in or try refreshing the page.
         </p>
         <Link href="/login">
           <Button className="bg-purple-600 hover:bg-purple-700 text-white text-lg px-8 py-3 rounded-full shadow-md">
@@ -274,8 +279,7 @@ if(!response.ok) {
         {messages.length === 0 ? (
           <p className="text-gray-500 italic text-center py-8">
             Hello! Send a selfie or a message to start your beauty analysis.
-              
-
+            <br />
             (Or ask me anything about beauty!)
           </p>
         ) : (
@@ -288,7 +292,7 @@ if(!response.ok) {
                 <div className="flex-shrink-0">
                   {/* AI Avatar */}
                   <Image
-                    src="images/wonderjoy-ai-avatar.png" // Path to your AI avatar image in /public
+                    src="images/wonderjoy-ai-avatar.png"
                     alt="WonderJoy AI"
                     width={32}
                     height={32}
@@ -296,7 +300,7 @@ if(!response.ok) {
                   />
                 </div>
               )}
-              
+
               <div className={`flex flex-col max-w-[75%] p-3 rounded-xl shadow-sm relative group ${
                 msg.sender === 'user'
                   ? 'bg-purple-600 text-white rounded-br-none'
@@ -321,7 +325,7 @@ if(!response.ok) {
                     />
                   </div>
                 )}
-                {msg.type === 'video' && msg.mediaUrl && ( // Render video if you support it
+                {msg.type === 'video' && msg.mediaUrl && (
                   <div className="relative w-48 h-32 md:w-64 md:h-48 rounded-lg overflow-hidden border border-gray-300 mb-1 bg-black flex items-center justify-center">
                     <video
                       src={msg.mediaUrl}
@@ -366,7 +370,6 @@ if(!response.ok) {
                         </ul>
                       </div>
                     )}
-                    {/* Add more analysis data points as needed */}
                   </div>
                 )}
                 <span className={`text-xs mt-1 ${msg.sender === 'user' ? 'text-purple-200' : 'text-gray-500'} text-right`}>
@@ -378,8 +381,8 @@ if(!response.ok) {
                 <div className="flex-shrink-0">
                   {/* User Avatar */}
                   <Image
-                    src={user?.photoURL || 'images/default-avatar.png'} // Use user's actual photoURL from AuthContext
-                    alt={user?.displayName || "You"}
+                    src={activeUser?.photoURL || 'images/default-avatar.png'}
+                    alt={activeUser?.displayName || "You"}
                     width={32}
                     height={32}
                     className="rounded-full object-cover border-2 border-purple-400"
@@ -393,7 +396,7 @@ if(!response.ok) {
         {isProcessingAI && (
           <div className="flex justify-start items-center gap-3 mb-4">
             <Image
-              src="images/wonderjoy-ai-avatar.png" // Your AI avatar
+              src="images/wonderjoy-ai-avatar.png"
               alt="WonderJoy AI"
               width={32}
               height={32}
@@ -409,82 +412,76 @@ if(!response.ok) {
       </div>
 
       {/* Chat Input Area */}
-      {/* The `user` check is now handled by the outer conditional render */}
-        <form onSubmit={handleSendMessage} className="flex flex-col gap-2 p-2 bg-gray-100 rounded-lg border border-gray-200">
-          {/* Display selected file names */}
-          {(selectedImageFile || selectedVideoFile) && (
-            <div className="flex items-center gap-2 text-sm text-gray-700 px-2">
-              {selectedImageFile && (
-                <span className="flex items-center gap-1 bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
-                  <ImageIcon className="w-4 h-4" /> {selectedImageFile.name}
-                  <button type="button" onClick={() => setSelectedImageFile(null)} className="ml-1 text-blue-600 hover:text-blue-900 font-bold">x</button>
-                </span>
-              )}
-              {selectedVideoFile && (
-                <span className="flex items-center gap-1 bg-green-100 text-green-800 px-2 py-1 rounded-full">
-                  <VideoIcon className="w-4 h-4" /> {selectedVideoFile.name}
-                  <button type="button" onClick={() => setSelectedVideoFile(null)} className="ml-1 text-green-600 hover:text-green-900 font-bold">x</button>
-                </span>
-              )}
-            </div>
-          )}
-
-          <div className="flex gap-2 items-center">
-            <Input
-              type="text"
-              value={currentMessageText}
-              onChange={(e) => {
-                setCurrentMessageText(e.target.value);
-                // Clear media selection when typing text, but not the file input itself
-                setSelectedImageFile(null);
-                setSelectedVideoFile(null);
-                // Optionally reset the file input visually
-                const chatImageUploadInput = document.getElementById('chatImageUpload') as HTMLInputElement;
-                if (chatImageUploadInput) chatImageUploadInput.value = '';
-                const chatVideoUploadInput = document.getElementById('chatVideoUpload') as HTMLInputElement;
-                if (chatVideoUploadInput) chatVideoUploadInput.value = '';
-              }}
-              placeholder={selectedImageFile || selectedVideoFile ? "Add a caption (optional)" : "Ask WonderJoy AI anything or upload a selfie..."}
-              className="flex-grow border-gray-300 focus:border-purple-500 focus:ring-purple-500 rounded-full py-2 px-4"
-              disabled={isProcessingAI}
-            />
-            {/* Image Upload Button */}
-            <label htmlFor="chatImageUpload" className="cursor-pointer bg-purple-100 text-purple-700 hover:bg-purple-200 p-2 rounded-full shadow-sm transition-colors flex items-center justify-center w-10 h-10 flex-shrink-0">
-              <ImageIcon className="w-5 h-5" />
-              <input
-                id="chatImageUpload"
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleImageChange}
-                disabled={isProcessingAI || !!selectedVideoFile || (currentMessageText.trim() !== '' && !selectedImageFile)} // Disable if video selected or text entered and no image is already selected
-              />
-            </label>
-            {/* Video Upload Button (if supported for analysis) */}
-            <label htmlFor="chatVideoUpload" className="cursor-pointer bg-purple-100 text-purple-700 hover:bg-purple-200 p-2 rounded-full shadow-sm transition-colors flex items-center justify-center w-10 h-10 flex-shrink-0">
-              <VideoIcon className="w-5 h-5" />
-              <input
-                id="chatVideoUpload"
-                type="file"
-                accept="video/*"
-                className="hidden"
-                onChange={handleVideoChange}
-                disabled={isProcessingAI || !!selectedImageFile || (currentMessageText.trim() !== '' && !selectedVideoFile)} // Disable if image selected or text entered and no video is already selected
-              />
-            </label>
-            <Button
-              type="submit"
-              className="bg-purple-600 hover:bg-purple-700 text-white rounded-full p-3 shadow-md transition-colors flex-shrink-0"
-              disabled={isProcessingAI || (currentMessageText.trim() === '' && !selectedImageFile && !selectedVideoFile)}
-            >
-              {isProcessingAI ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
-              ) : (
-                <SendIcon className="w-5 h-5" />
-              )}
-            </Button>
+      <form onSubmit={handleSendMessage} className="flex flex-col gap-2 p-2 bg-gray-100 rounded-lg border border-gray-200">
+        {(selectedImageFile || selectedVideoFile) && (
+          <div className="flex items-center gap-2 text-sm text-gray-700 px-2">
+            {selectedImageFile && (
+              <span className="flex items-center gap-1 bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                <ImageIcon className="w-4 h-4" /> {selectedImageFile.name}
+                <button type="button" onClick={() => setSelectedImageFile(null)} className="ml-1 text-blue-600 hover:text-blue-900 font-bold">x</button>
+              </span>
+            )}
+            {selectedVideoFile && (
+              <span className="flex items-center gap-1 bg-green-100 text-green-800 px-2 py-1 rounded-full">
+                <VideoIcon className="w-4 h-4" /> {selectedVideoFile.name}
+                <button type="button" onClick={() => setSelectedVideoFile(null)} className="ml-1 text-green-600 hover:text-green-900 font-bold">x</button>
+              </span>
+            )}
           </div>
-        </form>
+        )}
+
+        <div className="flex gap-2 items-center">
+          <Input
+            type="text"
+            value={currentMessageText}
+            onChange={(e) => {
+              setCurrentMessageText(e.target.value);
+              setSelectedImageFile(null);
+              setSelectedVideoFile(null);
+              const chatImageUploadInput = document.getElementById('chatImageUpload') as HTMLInputElement;
+              if (chatImageUploadInput) chatImageUploadInput.value = '';
+              const chatVideoUploadInput = document.getElementById('chatVideoUpload') as HTMLInputElement;
+              if (chatVideoUploadInput) chatVideoUploadInput.value = '';
+            }}
+            placeholder={selectedImageFile || selectedVideoFile ? "Add a caption (optional)" : "Ask WonderJoy AI anything or upload a selfie..."}
+            className="flex-grow border-gray-300 focus:border-purple-500 focus:ring-purple-500 rounded-full py-2 px-4"
+            disabled={isProcessingAI}
+          />
+          <label htmlFor="chatImageUpload" className="cursor-pointer bg-purple-100 text-purple-700 hover:bg-purple-200 p-2 rounded-full shadow-sm transition-colors flex items-center justify-center w-10 h-10 flex-shrink-0">
+            <ImageIcon className="w-5 h-5" />
+            <input
+              id="chatImageUpload"
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleImageChange}
+              disabled={isProcessingAI || !!selectedVideoFile || (currentMessageText.trim() !== '' && !selectedImageFile)}
+            />
+          </label>
+          <label htmlFor="chatVideoUpload" className="cursor-pointer bg-purple-100 text-purple-700 hover:bg-purple-200 p-2 rounded-full shadow-sm transition-colors flex items-center justify-center w-10 h-10 flex-shrink-0">
+            <VideoIcon className="w-5 h-5" />
+            <input
+              id="chatVideoUpload"
+              type="file"
+              accept="video/*"
+              className="hidden"
+              onChange={handleVideoChange}
+              disabled={isProcessingAI || !!selectedImageFile || (currentMessageText.trim() !== '' && !selectedVideoFile)}
+            />
+          </label>
+          <Button
+            type="submit"
+            className="bg-purple-600 hover:bg-purple-700 text-white rounded-full p-3 shadow-md transition-colors flex-shrink-0"
+            disabled={isProcessingAI || (currentMessageText.trim() === '' && !selectedImageFile && !selectedVideoFile)}
+          >
+            {isProcessingAI ? (
+              <Loader2 className="h-5 w-5 animate-spin" />
+            ) : (
+              <SendIcon className="w-5 h-5" />
+            )}
+          </Button>
+        </div>
+      </form>
     </section>
   );
 }

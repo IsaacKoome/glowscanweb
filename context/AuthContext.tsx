@@ -36,12 +36,11 @@ import { useRouter } from 'next/navigation';
 
 const db: Firestore = getFirestore(auth.app as FirebaseApp);
 
-// --- START FIX 1: Update UserData interface ---
 interface UserData {
   uid: string;
   email: string | null;
-  displayName: string | null; // Added displayName
-  photoURL: string | null;    // Added photoURL
+  displayName: string | null;
+  photoURL: string | null;
   subscriptionPlan: string;
   geminiCountToday: number;
   gpt4oCountToday: number;
@@ -50,9 +49,9 @@ interface UserData {
   paystackSubscriptionStatus?: string;
   paystackLastTxRef?: string;
   paystackSubscriptionCode?: string;
+  isAnonymous?: boolean; // Add this field to distinguish anonymous users
   [key: string]: any;
 }
-// --- END FIX 1 ---
 
 interface AuthContextType {
   user: UserData | null;
@@ -75,17 +74,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const setupUserListener = useCallback((firebaseUser: FirebaseUser) => {
     const userDocRef: DocumentReference = doc(db, 'users', firebaseUser.uid);
 
-        // --- START: THE CRITICAL FIX ---
-    // Every time a user logs in, we'll ensure their Firestore profile is up-to-date
-    // with the latest info from their auth provider (e.g., Google).
+    // Sync profile data for both authenticated and anonymous users
+    // Anonymous users might not have displayName/photoURL, but merge:true handles that.
     const profileDataToSync = {
-      displayName: firebaseUser.displayName,
-      photoURL: firebaseUser.photoURL,
-      email: firebaseUser.email, // Also good to keep the email in sync
+      displayName: firebaseUser.displayName || null, // Ensure null for anonymous
+      photoURL: firebaseUser.photoURL || null,     // Ensure null for anonymous
+      email: firebaseUser.email || null,           // Ensure null for anonymous
+      isAnonymous: firebaseUser.isAnonymous,       // Store if user is anonymous
     };
 
-    // Use setDoc with merge: true. This creates the doc if it doesn't exist,
-    // or updates it if it does, without overwriting other fields.
     setDoc(userDocRef, profileDataToSync, { merge: true })
       .then(() => {
         console.log(`AuthContext: User profile synced with Firestore for ${firebaseUser.uid}`);
@@ -93,7 +90,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .catch(error => {
         console.error("AuthContext: Error syncing user profile to Firestore:", error);
       });
-    // --- END: THE CRITICAL FIX ---
 
     console.log(`AuthContext: Setting up onSnapshot listener for user ${firebaseUser.uid}`);
 
@@ -103,12 +99,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (docSnap.exists()) {
           const data = docSnap.data();
 
-          // --- START FIX 2: Enrich user data with photoURL and displayName ---
           const updatedUserData: UserData = {
             uid: firebaseUser.uid,
             email: firebaseUser.email,
-            displayName: firebaseUser.displayName, // Get from Firebase Auth
-            photoURL: firebaseUser.photoURL,       // Get from Firebase Auth
+            displayName: firebaseUser.displayName,
+            photoURL: firebaseUser.photoURL,
+            isAnonymous: firebaseUser.isAnonymous, // Set this based on the FirebaseUser object
             ...data,
             subscriptionPlan: data?.subscriptionPlan || 'free',
             geminiCountToday: data?.geminiCountToday ?? 0,
@@ -119,31 +115,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             paystackLastTxRef: data?.paystackLastTxRef ?? undefined,
             paystackSubscriptionCode: data?.paystackSubscriptionCode ?? undefined,
           };
-          // --- END FIX 2 ---
 
           if (isMountedRef.current) {
             setUser(updatedUserData);
-            console.log(`AuthContext: onSnapshot updated user data for ${firebaseUser.email || firebaseUser.uid}. Subscription: ${updatedUserData.subscriptionPlan}`);
+            console.log(`AuthContext: onSnapshot updated user data for ${firebaseUser.email || firebaseUser.uid}. Is anonymous? ${updatedUserData.isAnonymous}. Subscription: ${updatedUserData.subscriptionPlan}`);
           }
         } else {
           console.log(`AuthContext: User document for ${firebaseUser.uid} does not exist. Creating default.`);
-          // --- START FIX 3: Add displayName and photoURL for new users ---
           const newUserData: UserData = {
             uid: firebaseUser.uid,
-            email: firebaseUser.email,
-            displayName: firebaseUser.displayName, // Add for new user
-            photoURL: firebaseUser.photoURL,       // Add for new user
+            email: firebaseUser.email || null, // Ensure null for anonymous
+            displayName: firebaseUser.displayName || null, // Ensure null for anonymous
+            photoURL: firebaseUser.photoURL || null,     // Ensure null for anonymous
+            isAnonymous: firebaseUser.isAnonymous,       // Crucial for new anonymous users
             subscriptionPlan: 'free',
             geminiCountToday: 0,
             gpt4oCountToday: 0,
             lastAnalysisDate: new Date().toISOString().split('T')[0],
           };
-          // --- END FIX 3 ---
 
           setDoc(userDocRef, newUserData, { merge: true })
             .then(() => {
               if (isMountedRef.current) {
-                console.log(`Firestore document created for new user: ${firebaseUser.uid}`);
+                console.log(`Firestore document created for new user: ${firebaseUser.uid}. Is anonymous? ${newUserData.isAnonymous}`);
                 setUser(newUserData);
               }
             })
@@ -171,21 +165,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     unsubscribeFirestoreRef.current = unsubscribe;
     return unsubscribe;
   }, []);
-  //Implementing signInwithGoogle function
 
   const signInWithGoogle = useCallback(async () => {
-    const provider = new GoogleAuthProvider();
-    try {
+  const provider = new GoogleAuthProvider();
+  try {
+    // If an anonymous user is currently signed in, link them to Google
+    // Otherwise, just sign in with Google
+    if (auth.currentUser && auth.currentUser.isAnonymous) {
+      console.log('AuthContext: Linking anonymous user with Google.');
+      // The correction is here: call linkWithPopup on the auth instance,
+      // and pass the current user along with the provider.
+      await signInWithPopup(auth, provider); // signInWithPopup handles linking automatically if a user is already signed in.
+                                          // It essentially merges the anonymous session with the new provider's session.
+    } else {
       await signInWithPopup(auth, provider);
-      //on AuthStateChanged will handle the rest detecting new user
-      //setting up the listener and updating the state
-      router.push('/'); //redirect to homepage after succesful sign in
-    } catch (error) {
-      console.error("Error during Google sign-in:", error);
-      //you could add user facing error if desired
     }
-
-  }, [router]);
+    router.push('/');
+  } catch (error) {
+    console.error("Error during Google sign-in/linking:", error);
+    // You could add user facing error if desired
+  }
+}, [router]);
 
 
   const refreshUser = useCallback(async () => {
@@ -204,16 +204,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(async () => {
     try {
+      // If the user is an authenticated user (not anonymous), sign them out completely.
+      // If they are anonymous, we don't 'sign out' in the traditional sense,
+      // but rather clear the local state and effectively make them anonymous again
+      // when the onAuthStateChanged listener re-triggers.
       if (auth.currentUser && !auth.currentUser.isAnonymous) {
         await firebaseSignOut(auth);
         console.log('AuthContext: Authenticated user signed out successfully.');
+      } else if (auth.currentUser && auth.currentUser.isAnonymous) {
+        // For anonymous users, we just want to clear the session and allow a new anonymous session to start.
+        // Revoking their token is one way, or simply reloading the page will often trigger a new anonymous session.
+        // firebaseSignOut works even for anonymous, but the *impact* is different (no credential to invalidate).
+        await firebaseSignOut(auth); // This will clear the current anonymous session
+        console.log('AuthContext: Anonymous user session cleared.');
       } else {
-        console.log('AuthContext: Anonymous user, clearing state and navigating.');
-        setUser(null);
-        setLoading(false);
+        console.log('AuthContext: No active user to sign out.');
       }
 
-      router.push('/login');
+      // Clear local state immediately for faster UI response
+      setUser(null);
+      setLoading(false);
+      router.push('/login'); // Redirect after logout/clearing
     } catch (error) {
       console.error('AuthContext: Error signing out:', error);
     }
@@ -233,32 +244,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (firebaseUser) {
         console.log(`AuthContext: onAuthStateChanged detected user: ${firebaseUser.email || firebaseUser.uid}. Is anonymous? ${firebaseUser.isAnonymous}`);
-        setLoading(true);
+        setLoading(true); // Set loading while we fetch Firestore data for this user
         setupUserListener(firebaseUser);
       } else {
-        console.log('AuthContext: No authenticated user. Attempting anonymous sign-in or clearing state.');
-
-        if (user !== null) {
-          setUser(null);
-          setLoading(false);
-          console.log('AuthContext: User signed out, state cleared.');
-        } else if (!auth.currentUser) {
+        // No authenticated user, try to sign in anonymously if not on login page
+        console.log('AuthContext: No authenticated user. Attempting anonymous sign-in...');
+        if (window.location.pathname !== '/login' && window.location.pathname !== '/signup') { // Avoid infinite loop on login/signup pages
           try {
-            if (window.location.pathname !== '/login') {
-              setLoading(true);
-              const anonUserCred = await signInAnonymously(auth);
-              console.log('AuthContext: Anonymous user signed in:', anonUserCred.user.uid);
-              setupUserListener(anonUserCred.user);
-            } else {
-              setUser(null);
-              setLoading(false);
-            }
+            setLoading(true); // Set loading while anonymous sign-in is in progress
+            const anonUserCred = await signInAnonymously(auth);
+            console.log('AuthContext: Anonymous user signed in:', anonUserCred.user.uid);
+            setupUserListener(anonUserCred.user); // Setup listener for the new anonymous user
           } catch (error) {
             console.error('AuthContext: Error during anonymous sign-in:', error);
             setUser(null);
             setLoading(false);
           }
         } else {
+          // If on login/signup page, no anonymous sign-in. Just set user to null and stop loading.
+          setUser(null);
           setLoading(false);
         }
       }
@@ -272,7 +276,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         unsubscribeFirestoreRef.current();
       }
     };
-  }, [setupUserListener]); // Removed router and user from dependencies
+  }, [setupUserListener]);
 
   return (
     <AuthContext.Provider value={{ user, loading, logout, refreshUser, signInWithGoogle }}>
