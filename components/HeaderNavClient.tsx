@@ -66,15 +66,7 @@ export default function HeaderNavClient() {
           New Analysis
         </Link>
 
-        {/* NEW: History Link */}
-        <Link
-          href="/history"
-          className="flex items-center text-white text-lg font-semibold hover:text-pink-200 transition-colors"
-          onClick={() => setIsMobileMenuOpen(false)}
-        >
-          <ClockIcon className="h-6 w-6 mr-1" />
-          History
-        </Link>
+       
 
         {/* Existing Tips Link */}
         <Link
