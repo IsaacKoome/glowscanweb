@@ -63,7 +63,7 @@ export default function HeaderNavClient() {
           onClick={() => setIsMobileMenuOpen(false)} // Close menu on click
         >
           <SparklesIcon className="h-6 w-6 mr-2" />
-          New Analysis
+          New Chat
         </Link>
 
        
