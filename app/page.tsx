@@ -7,12 +7,16 @@ import Image from 'next/image';
 import AnalysisResult from '../components/AnalysisResult'; // Make sure path is correct
 import { useAuth } from '../context/AuthContext'; // NEW: Import useAuth hook
 
+interface AnalysisResultData {
+  [key: string]: unknown;
+}
+
 export default function HomePage() {
   const { user, loading: authLoading } = useAuth(); // NEW: Get user and authLoading from AuthContext
   const [showCamera, setShowCamera] = useState(false);
   const [capturedImagePreviewUrl, setCapturedImagePreviewUrl] = useState<string | null>(null);
-  const [analysisResult, setAnalysisResult] = useState<any | null>(null); // For snapshot analysis result
-  const [liveResult, setLiveResult] = useState<any | null>(null); // For continuous live analysis result
+  const [analysisResult, setAnalysisResult] = useState<AnalysisResultData | null>(null); // For snapshot analysis result
+  const [liveResult, setLiveResult] = useState<AnalysisResultData | null>(null); // For continuous live analysis result
   const [isStreamingAnalysis, setIsStreamingAnalysis] = useState<boolean>(false);
   const [isPaused, setIsPaused] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -116,9 +120,11 @@ export default function HomePage() {
 
           setIsPaused(true); // Auto-pause after a successful analysis result is received
 
-        } catch (err: any) {
+        } catch (err: unknown) {
           console.error('Live analysis fetch error:', err);
-          setError(`Network error during analysis: ${err.message}`);
+          if (err instanceof Error) {
+            setError(`Network error during analysis: ${err.message}`);
+          }
         }
       }, 'image/jpeg', 0.9); // Increased quality to 0.9
     }
@@ -183,10 +189,12 @@ export default function HomePage() {
             console.log("Video playback initiated successfully.");
             setCameraStatus('playing');
             setIsStreamingAnalysis(true);
-          } catch (playErr: any) {
+          } catch (playErr: unknown) {
             console.error("Error playing video stream after onloadeddata:", playErr);
             setCameraStatus('error');
-            setError(`Failed to play camera stream: ${playErr.message || playErr.name}. Is camera in use or permissions denied?`);
+            if (playErr instanceof Error) {
+              setError(`Failed to play camera stream: ${playErr.message || playErr.name}. Is camera in use or permissions denied?`);
+            }
             setShowCamera(false);
           }
         };
@@ -200,17 +208,19 @@ export default function HomePage() {
 
         videoRef.current.load();
 
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error('Error accessing camera in initCamera:', err);
         let message = 'Unable to access the camera.';
-        if (err.name === 'NotAllowedError' || err.name === 'SecurityError') {
-          message = 'Camera access denied. Please allow permissions in browser/device settings.';
-        } else if (err.name === 'NotFoundError') {
-          message = 'No camera device found. Try switching to a device with a camera.';
-        } else if (window.location.protocol !== 'https:') {
-          message = 'Camera access requires HTTPS. Please deploy your app over HTTPS to enable camera.';
-        } else {
-          message = `Camera error: ${err.message || err.name}.`;
+        if (err instanceof Error) {
+          if (err.name === 'NotAllowedError' || err.name === 'SecurityError') {
+            message = 'Camera access denied. Please allow permissions in browser/device settings.';
+          } else if (err.name === 'NotFoundError') {
+            message = 'No camera device found. Try switching to a device with a camera.';
+          } else if (window.location.protocol !== 'https:') {
+            message = 'Camera access requires HTTPS. Please deploy your app over HTTPS to enable camera.';
+          } else {
+            message = `Camera error: ${err.message || err.name}.`;
+          }
         }
         setError(message);
         setCameraStatus('error');
@@ -302,12 +312,12 @@ export default function HomePage() {
 
       {/* NEW: Early Stage Development Message */}
       <div className="mt-16 max-w-3xl mx-auto bg-yellow-50 border border-yellow-200 rounded-2xl shadow-lg p-6 text-center text-yellow-800">
-        <h2 className="text-2xl font-bold mb-3">We're Just Getting Started! 🌱</h2>
+        <h2 className="text-2xl font-bold mb-3">We&apos;re Just Getting Started! 🌱</h2>
         <p className="text-lg mb-4">
-          WonderJoy AI is in its early development phase. We're constantly working to refine our analysis, add exciting new features, and squash any bugs you might encounter. Your experience helps us grow!
+          WonderJoy AI is in its early development phase. We&apos;re constantly working to refine our analysis, add exciting new features, and squash any bugs you might encounter. Your experience helps us grow!
         </p>
         <p className="text-lg mb-6">
-          If you love what we're building and want to help shape the future of beauty tech, consider becoming an early adopter or sharing your valuable feedback.
+          If you love what we&apos;re building and want to help shape the future of beauty tech, consider becoming an early adopter or sharing your valuable feedback.
         </p>
         <Link href="mailto:koomeisaac16@gmail.com" className="inline-flex items-center justify-center bg-yellow-500 text-white font-bold py-3 px-8 rounded-full text-lg shadow-md transition duration-300 ease-in-out hover:bg-yellow-600 focus:outline-none focus:ring-4 focus:ring-yellow-300">
           Reach Us ❤️

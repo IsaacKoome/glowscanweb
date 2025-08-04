@@ -6,11 +6,15 @@ import Image from 'next/image'; // For optimized image handling in Next.js
 import ImageUploader from '../../components/ImageUploader'; // Adjust path based on your actual structure
 import AnalysisResult from '../../components/AnalysisResult'; // Adjust path based on your actual structure
 
+interface AnalysisResultData {
+  [key: string]: unknown;
+}
+
 export default function UploadPage() {
   // Explicitly type useState hooks for better type safety
   const [selectedFile, setSelectedFile] = useState<File | null>(null); // Stores the actual File object
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null); // Stores URL for displaying preview
-  const [analysisResult, setAnalysisResult] = useState<any | null>(null); // Use 'any' or define a more specific interface for your result
+  const [analysisResult, setAnalysisResult] = useState<AnalysisResultData | null>(null); // Use a specific interface for your result
   const [loading, setLoading] = useState<boolean>(false); // Controls loading state for UI
   const [error, setError] = useState<string | null>(null); // Stores any error messages
 
@@ -63,10 +67,12 @@ export default function UploadPage() {
       const result = await response.json(); // Parse the JSON response from FastAPI
       setAnalysisResult(result); // Set the received analysis result
       
-    } catch (err: any) { // Type 'err' as 'any' or 'Error' for safety
+    } catch (err: unknown) { // Type 'err' as 'unknown' for safety
       // Catch network errors or errors thrown from the response handling
       console.error('Analysis error:', err);
-      setError(`Failed to analyze image: ${err.message}. Please check server connection and console for details.`);
+      if (err instanceof Error) {
+        setError(`Failed to analyze image: ${err.message}. Please check server connection and console for details.`);
+      }
     } finally {
       setLoading(false); // End loading state
     }

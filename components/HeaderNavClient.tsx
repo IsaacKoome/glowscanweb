@@ -6,7 +6,6 @@ import Link from 'next/link';
 import { useAuth } from '../context/AuthContext'; // Import useAuth hook
 import {
   SparklesIcon,      // For New Analysis
-  ClockIcon,        // For History
   UserIcon,         // For Profile
   ArrowRightEndOnRectangleIcon, // For Logout
   KeyIcon           // For Login/Register

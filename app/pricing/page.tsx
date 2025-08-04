@@ -139,9 +139,11 @@ export default function PricingPage() {
       } else {
         setPaymentError("No checkout URL received from Paystack.");
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Payment initiation error:', error);
-      setPaymentError(`Failed to initiate payment: ${error.message || 'An unexpected error occurred.'}`);
+      if (error instanceof Error) {
+        setPaymentError(`Failed to initiate payment: ${error.message || 'An unexpected error occurred.'}`);
+      }
     } finally {
       setLoadingPayment(null);
     }

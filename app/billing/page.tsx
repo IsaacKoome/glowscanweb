@@ -36,9 +36,11 @@ export default function BillingDashboard() {
       // Optionally, you might want to call refreshUser() from AuthContext here
       // to immediately update the user's plan in the frontend after cancellation.
       // E.g., const { refreshUser } = useAuth(); and then refreshUser();
-    } catch (err: any) {
+    } catch (err: unknown) {
       setStatus("error");
-      setErrorMessage(err.message || "Something went wrong.");
+      if (err instanceof Error) {
+        setErrorMessage(err.message || "Something went wrong.");
+      }
     }
   };
 

@@ -213,12 +213,6 @@ export function ChatView({ conversationId }: ChatViewProps) {
           <div className="flex justify-center items-center h-full">
             <Loader2 className="h-8 w-8 animate-spin text-purple-700" />
           </div>
-        ) : messages.length === 0 ? (
-          <div className="text-center text-gray-500 py-16">
-            <SparklesIcon className="w-12 h-12 mx-auto text-purple-400 mb-4" />
-            <h3 className="text-xl font-semibold mb-2">Start a new conversation</h3>
-            <p>Ask anything or upload a selfie for analysis.</p>
-          </div>
         ) : (
           <div className="space-y-6">
             {messages.map((msg) => (
@@ -310,6 +304,13 @@ export function ChatView({ conversationId }: ChatViewProps) {
             <div ref={messagesEndRef} />
           </div>
         )}
+        {messages.length === 0 && !isLoadingMessages && (
+          <div className="text-center text-gray-500 py-16">
+            <SparklesIcon className="w-12 h-12 mx-auto text-purple-400 mb-4" />
+            <h3 className="text-xl font-semibold mb-2">Start a new conversation</h3>
+            <p>Ask anything or upload a selfie for analysis.</p>
+          </div>
+        )}
       </div>
 
       <div className="p-4 bg-white border-t border-gray-200">
@@ -342,3 +343,4 @@ export function ChatView({ conversationId }: ChatViewProps) {
     </main>
   );
 }
+

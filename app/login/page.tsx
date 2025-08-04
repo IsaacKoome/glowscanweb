@@ -53,7 +53,7 @@ export default function LoginPage() {
           refreshUser();
         }, 500);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       // ... (error handling remains the same)
       if (error instanceof FirebaseError) {
         switch (error.code) {
@@ -76,7 +76,7 @@ export default function LoginPage() {
           default:
             setMessage(`Authentication Error: ${error.message}`);
         }
-      } else {
+      } else if (error instanceof Error) {
         setMessage(`An unexpected error occurred: ${error.message}`);
       }
     } finally {
@@ -91,7 +91,7 @@ export default function LoginPage() {
     try {
       await signInWithGoogle();
       // No need to do anything else, the AuthContext and router push will handle it
-    } catch (error) {
+    } catch {
       setMessage('Failed to sign in with Google. Please try again.');
       setLoading(false);
     }
