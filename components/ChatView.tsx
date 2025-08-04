@@ -226,7 +226,7 @@ export function ChatView({ conversationId }: ChatViewProps) {
                 {msg.sender === 'ai' && (
                   <Image src="/images/wonderjoy-ai-avatar.png" alt="AI" width={32} height={32} className="rounded-full border-2 border-purple-400" />
                 )}
-                <div className={`flex flex-col max-w-[80%] p-3 rounded-xl shadow-sm ${msg.sender === 'user' ? 'bg-purple-600 text-white rounded-br-none' : 'bg-white text-gray-800 rounded-bl-none'}`}>
+                <div className={`flex flex-col max-w-[80%] p-3 rounded-xl shadow-sm ${msg.sender === 'user' ? 'bg-purple-600 text-white rounded-br-none' : 'bg-gray-200 text-gray-800 rounded-bl-none'}`}>
                   {/* Message content rendering logic here, adapted from original page */}
                    {msg.type === 'text' && msg.content && (
                   <p className="text-sm whitespace-pre-wrap break-words">{msg.content}</p>

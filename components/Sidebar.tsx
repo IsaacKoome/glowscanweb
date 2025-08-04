@@ -25,6 +25,7 @@ interface Conversation {
 export function Sidebar() {
   const { user, loading, logout } = useAuth();
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [isCreatingChat, setIsCreatingChat] = useState(false);
   const [isLoadingConversations, setIsLoadingConversations] = useState(true);
   const router = useRouter();
   const params = useParams();
@@ -55,7 +56,8 @@ export function Sidebar() {
   }, [user]);
 
   const handleNewChat = async () => {
-    if (!user) return;
+    if (!user || isCreatingChat) return;
+    setIsCreatingChat(true);
     try {
       const docRef = await addDoc(collection(db, `users/${user.uid}/conversations`), {
         name: 'New Chat',
@@ -64,6 +66,8 @@ export function Sidebar() {
       router.push(`/chat/${docRef.id}`);
     } catch (error) {
       console.error("Error creating new chat:", error);
+    } finally {
+      setIsCreatingChat(false);
     }
   };
 
@@ -94,8 +98,13 @@ export function Sidebar() {
           WonderJoy
         </Link>
       </div>
-      <Button onClick={handleNewChat} className="w-full bg-purple-600 hover:bg-purple-700 mb-6">
-        <PlusCircleIcon className="mr-2 h-4 w-4" /> New Chat
+      <Button onClick={handleNewChat} disabled={isCreatingChat} className="w-full bg-purple-600 hover:bg-purple-700 mb-6">
+        {isCreatingChat ? (
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+        ) : (
+          <PlusCircleIcon className="mr-2 h-4 w-4" />
+        )}
+        New Chat
       </Button>
       <div className="flex-1 overflow-y-auto custom-scrollbar">
         <h2 className="text-sm font-semibold text-gray-400 mb-2">Recent Chats</h2>
