@@ -16,6 +16,8 @@ import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp } from 
 import { db } from '@/lib/firebase';
 import Image from 'next/image';
 
+import { getInitials } from '@/lib/utils';
+
 interface Conversation {
   id: string;
   name: string;
@@ -131,13 +133,19 @@ export function Sidebar() {
         <div className="border-t border-gray-700 pt-4">
           {user ? (
             <div className="flex items-center gap-3">
-              <Image
-                src={user.photoURL || '/images/default-avatar.png'}
-                alt={user.displayName || 'User'}
-                width={36}
-                height={36}
-                className="rounded-full"
-              />
+              {user.photoURL ? (
+                <Image
+                  src={user.photoURL}
+                  alt={user.displayName || 'User'}
+                  width={36}
+                  height={36}
+                  className="rounded-full"
+                />
+              ) : (
+                <div className="w-9 h-9 rounded-full bg-purple-600 flex items-center justify-center text-white font-bold">
+                  {getInitials(user.displayName)}
+                </div>
+              )}
               <div className="flex-1 truncate">
                 <p className="text-sm font-semibold">{user.displayName || 'Anonymous User'}</p>
                 <Link href={`/profile/${user.uid}`} className="text-xs text-gray-400 hover:underline">

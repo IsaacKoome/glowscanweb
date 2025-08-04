@@ -27,6 +27,8 @@ import { db, storage } from "@/lib/firebase";
 import { v4 as uuidv4 } from "uuid";
 import { useAuth } from '../context/AuthContext';
 
+import { getInitials } from '@/lib/utils';
+
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://glowscan-backend-241128138627.us-central1.run.app';
 
 interface AIMessage {
@@ -289,7 +291,13 @@ export function ChatView({ conversationId }: ChatViewProps) {
                 </div>
                 {msg.sender === 'user' && (
                   <div className="flex-shrink-0">
-                    <Image src={user?.photoURL || '/images/default-avatar.png'} alt="User" width={32} height={32} className="rounded-full max-w-full" />
+                    {user?.photoURL ? (
+                      <Image src={user.photoURL} alt="User" width={32} height={32} className="rounded-full" />
+                    ) : (
+                      <div className="w-8 h-8 rounded-full bg-purple-600 flex items-center justify-center text-white font-bold text-sm">
+                        {getInitials(user?.displayName)}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
