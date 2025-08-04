@@ -1,0 +1,27 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Rules for wonderjoy_chat_images
+    // Allow any authenticated user (including anonymous) to write (upload) to their OWN folder.
+    // Allow any authenticated user to read from any image in this folder
+    // (This allows the AI avatar and potentially other users' images to be displayed if needed,
+    // though typically chat images are only read by the user and AI).
+    match /wonderjoy_chat_images/{userId}/{conversationId}/{fileName} {
+      allow write: if request.auth != null && request.auth.uid == userId;
+      allow read: if request.auth != null;
+    }
+    // Rules for wonderjoy_chat_videos
+    // Same logic as for images.
+    match /wonderjoy_chat_videos/{userId}/{conversationId}/{fileName} {
+      allow write: if request.auth != null && request.auth.uid == userId;
+      allow read: if request.auth != null;
+    }
+
+    // IMPORTANT: By default, if no rule matches, access is denied.
+    // If you have other storage paths, ensure you add appropriate rules for them.
+    // Example: Deny all other access unless explicitly allowed
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

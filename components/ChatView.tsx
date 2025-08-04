@@ -288,7 +288,9 @@ export function ChatView({ conversationId }: ChatViewProps) {
                   </span>
                 </div>
                 {msg.sender === 'user' && (
-                  <Image src={user?.photoURL || '/images/default-avatar.png'} alt="User" width={32} height={32} className="rounded-full" />
+                  <div className="flex-shrink-0">
+                    <Image src={user?.photoURL || '/images/default-avatar.png'} alt="User" width={32} height={32} className="rounded-full max-w-full" />
+                  </div>
                 )}
               </div>
             ))}

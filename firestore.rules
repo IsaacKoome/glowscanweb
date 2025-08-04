@@ -1,0 +1,29 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Users collection rules
+    // Allow any authenticated user (including anonymous) to read and write their OWN user document.
+    // 'create' is specifically added to allow anonymous users to implicitly create their user record
+    // when they first interact with Firestore if you're storing user-specific data there.
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Rule for the 'conversations' subcollection, allowing users to manage their own conversations.
+    match /users/{userId}/conversations/{conversationId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Rule for messages within a conversation, allowing users to read and create messages.
+    match /users/{userId}/conversations/{conversationId}/messages/{messageId} {
+      allow read, create: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // NEW RULES: Chat Session Summaries
+    match /user_chat_sessions/{userId}/sessions/{sessionId} {
+      // Allow any authenticated user (including anonymous) to create, read, and update
+      // their OWN chat session summaries.
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}
