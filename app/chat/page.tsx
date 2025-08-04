@@ -5,7 +5,7 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Sidebar } from '@/components/Sidebar';
 import { useAuth } from '@/context/AuthContext';
-import { Loader2, SparklesIcon, SendIcon, ImageIcon, VideoIcon } from 'lucide-react';
+import { Loader2, SendIcon, ImageIcon, VideoIcon } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { addDoc, collection, serverTimestamp, Timestamp } from 'firebase/firestore';
@@ -64,14 +64,28 @@ export default function ChatRootPage() {
 
       // 3. Add the first message
       const messagesCollectionPath = `users/${user.uid}/conversations/${conversationId}/messages`;
-      await addDoc(collection(db, messagesCollectionPath), {
+      const messagePayload: {
+        sender: 'user';
+        timestamp: Timestamp;
+        type: 'text' | 'image' | 'video';
+        content: string;
+        mediaUrl?: string;
+        senderPhotoURL?: string;
+      } = {
         sender: 'user',
         timestamp: Timestamp.now(),
         type: messageType,
         content: currentMessageText.trim(),
-        mediaUrl: mediaUrl,
-        senderPhotoURL: user.photoURL || undefined,
-      });
+      };
+
+      if (mediaUrl) {
+        messagePayload.mediaUrl = mediaUrl;
+      }
+      if (user.photoURL) {
+        messagePayload.senderPhotoURL = user.photoURL;
+      }
+
+      await addDoc(collection(db, messagesCollectionPath), messagePayload);
 
       // 4. (Optional) Immediately trigger AI response from the client, or let ChatView handle it
       const formData = new FormData();
