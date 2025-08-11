@@ -2,7 +2,9 @@
 import './globals.css';
 import Link from 'next/link';
 import { AuthProvider } from '../context/AuthContext';
+import { CameraProvider } from '../context/CameraContext';
 import HeaderNavClient from '@/components/HeaderNavClient';
+import CameraModal from '@/components/CameraModal';
 import Script from 'next/script'; // ✅ import Script from next/script
 
 
@@ -30,28 +32,32 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body className="bg-white text-gray-900 font-sans antialiased">
         <AuthProvider>
-          <header className="bg-gradient-to-r from-pink-500 to-purple-600 shadow-lg p-4 fixed w-full z-10 top-0"> {/* Added fixed positioning and z-index */}
-            <div className="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-center px-4 relative"> {/* Added relative for mobile menu positioning */}
-              <Link
-                href="/"
-                className="text-3xl font-extrabold text-white mb-2 sm:mb-0 hover:opacity-90 transition-opacity"
-              >
-                WonderJoy AI ✨
-              </Link>
-              <HeaderNavClient /> {/* This component now handles all primary navigation */}
-            </div>
-          </header>
+          <CameraProvider>
+            <header className="bg-gradient-to-r from-pink-500 to-purple-600 shadow-lg p-4 fixed w-full z-10 top-0"> {/* Added fixed positioning and z-index */}
+              <div className="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-center px-4 relative"> {/* Added relative for mobile menu positioning */}
+                <Link
+                  href="/"
+                  className="text-3xl font-extrabold text-white mb-2 sm:mb-0 hover:opacity-90 transition-opacity"
+                >
+                  WonderJoy AI ✨
+                </Link>
+                <HeaderNavClient /> {/* This component now handles all primary navigation */}
+              </div>
+            </header>
 
-          <main className="min-h-screen pt-20"> {/* Added padding-top to account for fixed header */}
-            {children}
-          </main>
+            <main className="min-h-screen pt-20"> {/* Added padding-top to account for fixed header */}
+              {children}
+            </main>
 
-          <footer className="bg-gray-800 text-white p-6 text-center text-sm">
-            <div className="max-w-7xl mx-auto">
-              © {new Date().getFullYear()} WonderJoy AI. All rights reserved.
-              <p className="mt-2 text-gray-400">Innovating beauty with intelligence. 🌟</p>
-            </div>
-          </footer>
+            <CameraModal />
+
+            <footer className="bg-gray-800 text-white p-6 text-center text-sm">
+              <div className="max-w-7xl mx-auto">
+                © {new Date().getFullYear()} WonderJoy AI. All rights reserved.
+                <p className="mt-2 text-gray-400">Innovating beauty with intelligence. 🌟</p>
+              </div>
+            </footer>
+          </CameraProvider>
         </AuthProvider>
       </body>
     </html>

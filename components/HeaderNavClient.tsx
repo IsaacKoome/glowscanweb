@@ -4,6 +4,7 @@
 import React, { useState } from 'react'; // Import useState for mobile menu
 import Link from 'next/link';
 import { useAuth } from '../context/AuthContext'; // Import useAuth hook
+import { useCamera } from '../context/CameraContext'; // Import useCamera hook
 import {
   SparklesIcon,      // For New Analysis
   UserIcon,         // For Profile
@@ -18,6 +19,7 @@ import {
 
 export default function HeaderNavClient() {
   const { user, loading, logout } = useAuth(); // Use the auth context
+  const { setShowCamera } = useCamera(); // Use the camera context
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false); // State for mobile menu
 
 
@@ -25,6 +27,11 @@ export default function HeaderNavClient() {
   if (loading) {
     return null; // Or a loading spinner if you prefer
   }
+
+  const handleLiveAnalysisClick = () => {
+    setShowCamera(true);
+    setIsMobileMenuOpen(false); // Close menu on click
+  };
 
   return (
     <div className="flex flex-col sm:flex-row items-center space-x-0 sm:space-x-6 w-full sm:w-auto">
@@ -56,14 +63,13 @@ export default function HeaderNavClient() {
         sm:static sm:bg-transparent sm:shadow-none sm:py-0
       `}>
         {/* NEW: Live Analysis Button (Primary Action) */}
-        <Link
-          href="/"
+        <button
+          onClick={handleLiveAnalysisClick}
           className="flex items-center px-5 py-2 rounded-full bg-white text-purple-700 font-semibold text-lg hover:bg-purple-100 transition-colors shadow-md transform hover:scale-105"
-          onClick={() => setIsMobileMenuOpen(false)} // Close menu on click
         >
           <SparklesIcon className="h-6 w-6 mr-2" />
           Live Analysis
-        </Link>
+        </button>
 
         {/* Existing Chat Link */}
         <Link
@@ -134,4 +140,29 @@ export default function HeaderNavClient() {
       </nav>
     </div>
   );
+}
+
+// Simple fade-in animation for the mobile menu
+const styles = `
+  @keyframes fade-in-down {
+    0% {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+    100% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  .animate-fade-in-down {
+    animation: fade-in-down 0.3s ease-out forwards;
+  }
+`;
+
+// Inject styles into the document head
+if (typeof window !== 'undefined') {
+  const styleSheet = document.createElement("style");
+  styleSheet.type = "text/css";
+  styleSheet.innerText = styles;
+  document.head.appendChild(styleSheet);
 }
