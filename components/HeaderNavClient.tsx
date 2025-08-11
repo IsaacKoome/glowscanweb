@@ -55,14 +55,23 @@ export default function HeaderNavClient() {
         ${isMobileMenuOpen ? 'absolute top-full left-0 bg-purple-700 shadow-lg py-4 transition-all duration-300 ease-in-out transform origin-top animate-fade-in-down' : ''}
         sm:static sm:bg-transparent sm:shadow-none sm:py-0
       `}>
-        {/* NEW: New Analysis Button (Primary Action) */}
+        {/* NEW: Live Analysis Button (Primary Action) */}
         <Link
-          href="/chat"
+          href="/"
           className="flex items-center px-5 py-2 rounded-full bg-white text-purple-700 font-semibold text-lg hover:bg-purple-100 transition-colors shadow-md transform hover:scale-105"
           onClick={() => setIsMobileMenuOpen(false)} // Close menu on click
         >
           <SparklesIcon className="h-6 w-6 mr-2" />
-          New Chat
+          Live Analysis
+        </Link>
+
+        {/* Existing Chat Link */}
+        <Link
+          href="/chat"
+          className="text-white text-lg font-semibold hover:text-pink-200 transition-colors"
+          onClick={() => setIsMobileMenuOpen(false)}
+        >
+          Chat
         </Link>
 
        
