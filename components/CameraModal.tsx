@@ -14,7 +14,7 @@ interface AnalysisResultData {
 }
 
 export default function CameraModal() {
-  const { showCamera, setShowCamera } = useCamera();
+  const { showCamera, setShowCamera, conversationId } = useCamera();
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   // const [capturedImagePreviewUrl, setCapturedImagePreviewUrl] = useState<string | null>(null);
@@ -102,16 +102,22 @@ export default function CameraModal() {
           setLiveResult(result);
           setIsPaused(true);
 
-          // Create conversation and redirect only if not already saving
           if (user && !isSaving) {
-            setIsSaving(true); // Prevent multiple saves
-            const conversationId = await createConversation(user.uid);
+            setIsSaving(true);
             const analysisText = "Here is your live analysis result.";
-            await addMessage(conversationId, user.uid, analysisText, 'ai', result);
-            setShowCamera(false);
-            router.push(`/chat/${conversationId}`);
-          }
 
+            if (conversationId) {
+              // Add to existing conversation
+              await addMessage(conversationId, user.uid, analysisText, 'ai', result);
+              setShowCamera(false);
+            } else {
+              // Create new conversation
+              const newConversationId = await createConversation(user.uid);
+              await addMessage(newConversationId, user.uid, analysisText, 'ai', result);
+              setShowCamera(false);
+              router.push(`/chat/${newConversationId}`);
+            }
+          }
 
         } catch (err: unknown) {
           if (err instanceof Error) {
@@ -120,7 +126,7 @@ export default function CameraModal() {
         }
       }, 'image/jpeg', 0.9);
     }
-  }, [isPaused, cameraStatus, user, tempUserId, router, setShowCamera, isSaving]);
+  }, [isPaused, cameraStatus, user, tempUserId, router, setShowCamera, isSaving, conversationId]);
 
   useEffect(() => {
     let stream: MediaStream | null = null;
@@ -240,7 +246,7 @@ export default function CameraModal() {
   };
 
   const closeCamera = () => {
-    setShowCamera(false);
+    setShowCamera(false, null);
   };
 
   if (!showCamera) {

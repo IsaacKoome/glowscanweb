@@ -10,7 +10,8 @@ import {
   SendIcon,
   Loader2,
   ImageIcon,
-  VideoIcon
+  VideoIcon,
+  CameraIcon
 } from "lucide-react";
 import {
   Timestamp,
@@ -26,6 +27,7 @@ import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, storage } from "@/lib/firebase";
 import { v4 as uuidv4 } from "uuid";
 import { useAuth } from '../context/AuthContext';
+import { useCamera } from '../context/CameraContext';
 
 import { getInitials } from '@/lib/utils';
 import AnalysisResult from './AnalysisResult';
@@ -39,13 +41,7 @@ interface AIMessage {
   type: 'text' | 'image' | 'video' | 'analysis_result';
   content?: string;
   mediaUrl?: string;
-  analysisData?: {
-    analyzedImage?: string;
-    skinHealthScore?: number;
-    acneSeverity?: string;
-    rednessLevel?: string;
-    recommendations?: string[];
-  };
+  analysisData?: Record<string, unknown>;
   imageUrlForAnalysis?: string;
   senderPhotoURL?: string;
 }
@@ -56,6 +52,7 @@ interface ChatViewProps {
 
 export function ChatView({ conversationId }: ChatViewProps) {
   const { user } = useAuth();
+  const { setShowCamera } = useCamera();
   const [messages, setMessages] = useState<AIMessage[]>([]);
   const [currentMessageText, setCurrentMessageText] = useState<string>('');
   const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
@@ -315,6 +312,7 @@ export function ChatView({ conversationId }: ChatViewProps) {
             <input id="chatImageUpload" type="file" accept="image/*" className="hidden" onChange={handleImageChange} disabled={isProcessingAI} />
             <label htmlFor="chatVideoUpload" className="cursor-pointer p-2 rounded-full hover:bg-gray-200"><VideoIcon className="w-5 h-5 text-gray-600" /></label>
             <input id="chatVideoUpload" type="file" accept="video/*" className="hidden" onChange={handleVideoChange} disabled={isProcessingAI} />
+            <button type="button" onClick={() => setShowCamera(true, conversationId)} className="cursor-pointer p-2 rounded-full hover:bg-gray-200"><CameraIcon className="w-5 h-5 text-gray-600" /></button>
             <Button type="submit" className="bg-purple-600 hover:bg-purple-700 text-white rounded-full p-3" disabled={isProcessingAI || (!currentMessageText.trim() && !selectedImageFile && !selectedVideoFile)}>
               {isProcessingAI ? <Loader2 className="h-5 w-5 animate-spin" /> : <SendIcon className="w-5 h-5" />}
             </Button>
