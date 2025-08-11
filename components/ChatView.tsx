@@ -201,8 +201,8 @@ export function ChatView({ conversationId }: ChatViewProps) {
   };
 
   return (
-    <main className="flex-1 flex flex-col bg-gray-100">
-      <header className="bg-white border-b border-gray-200 p-4 flex items-center justify-between">
+    <main className="flex-1 flex flex-col bg-gray-100 h-screen">
+      <header className="bg-white border-b border-gray-200 p-4 flex items-center justify-between z-10">
         <h2 className="text-xl font-bold text-purple-700 flex items-center gap-2">
           <SparklesIcon className="w-6 h-6 text-yellow-400" /> WonderJoy AI Analyst
         </h2>
@@ -291,7 +291,7 @@ export function ChatView({ conversationId }: ChatViewProps) {
         )}
       </div>
 
-      <div className="p-4 bg-white border-t border-gray-200">
+      <div className="p-4 bg-white border-t border-gray-200 z-10">
         <form onSubmit={handleSendMessage} className="flex flex-col gap-2">
           {(selectedImageFile || selectedVideoFile) && (
             <div className="flex items-center gap-2 text-sm text-gray-700 px-2">
