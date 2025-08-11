@@ -201,7 +201,7 @@ export function ChatView({ conversationId }: ChatViewProps) {
   };
 
   return (
-    <main className="flex-1 flex flex-col bg-gray-100 h-screen">
+    <main className="flex-1 flex flex-col bg-gray-100">
       <header className="bg-white border-b border-gray-200 p-4 flex items-center justify-between z-10">
         <h2 className="text-xl font-bold text-purple-700 flex items-center gap-2">
           <SparklesIcon className="w-6 h-6 text-yellow-400" /> WonderJoy AI Analyst
