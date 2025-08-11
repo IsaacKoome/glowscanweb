@@ -28,6 +28,7 @@ import { v4 as uuidv4 } from "uuid";
 import { useAuth } from '../context/AuthContext';
 
 import { getInitials } from '@/lib/utils';
+import AnalysisResult from './AnalysisResult';
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://glowscan-backend-241128138627.us-central1.run.app';
 
@@ -251,38 +252,8 @@ export function ChatView({ conversationId }: ChatViewProps) {
                 )}
                 {msg.type === 'analysis_result' && msg.analysisData && (
                   <div className="bg-purple-100 p-3 rounded-lg mt-2 text-purple-800 border border-purple-200">
-                    <h4 className="font-bold mb-1">Beauty Analysis Summary:</h4>
-                    {msg.analysisData.analyzedImage && (
-                        <div className="relative w-full h-32 rounded-lg overflow-hidden border border-purple-300 mb-2">
-                            <Image
-                                src={msg.analysisData.analyzedImage}
-                                alt="Analyzed Selfie"
-                                fill
-                                className="object-cover"
-                                sizes="100vw"
-                            />
-                            <span className="absolute top-1 left-1 bg-purple-600 text-white text-xs px-2 py-1 rounded-full">Analyzed</span>
-                        </div>
-                    )}
-                    <p className="text-sm">
-                      <span className="font-semibold">Skin Health Score:</span> {msg.analysisData.skinHealthScore}/100
-                    </p>
-                    <p className="text-sm">
-                      <span className="font-semibold">Acne Severity:</span> {msg.analysisData.acneSeverity}
-                    </p>
-                    <p className="text-sm">
-                      <span className="font-semibold">Redness Level:</span> {msg.analysisData.rednessLevel}
-                    </p>
-                    {msg.analysisData.recommendations && msg.analysisData.recommendations.length > 0 && (
-                      <div className="mt-2">
-                        <p className="font-semibold text-sm">Recommendations:</p>
-                        <ul className="list-disc list-inside text-sm">
-                          {msg.analysisData.recommendations.map((rec: string, index: number) => (
-                            <li key={index}>{rec}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
+                    <h4 className="font-bold mb-1">Live Analysis Result:</h4>
+                    <AnalysisResult result={msg.analysisData} />
                   </div>
                 )}
                   <span className={`text-xs mt-1 ${msg.sender === 'user' ? 'text-purple-200' : 'text-gray-500'} text-right`}>

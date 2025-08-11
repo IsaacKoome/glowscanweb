@@ -3,9 +3,11 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import AnalysisResult from './AnalysisResult';
 import { useAuth } from '../context/AuthContext';
 import { useCamera } from '../context/CameraContext';
+import { createConversation, addMessage } from '../lib/chat';
 
 interface AnalysisResultData {
   [key: string]: unknown;
@@ -14,8 +16,9 @@ interface AnalysisResultData {
 export default function CameraModal() {
   const { showCamera, setShowCamera } = useCamera();
   const { user, loading: authLoading } = useAuth();
-  const [capturedImagePreviewUrl, setCapturedImagePreviewUrl] = useState<string | null>(null);
-  const [analysisResult, setAnalysisResult] = useState<AnalysisResultData | null>(null);
+  const router = useRouter();
+  // const [capturedImagePreviewUrl, setCapturedImagePreviewUrl] = useState<string | null>(null);
+  // const [analysisResult, setAnalysisResult] = useState<AnalysisResultData | null>(null);
   const [liveResult, setLiveResult] = useState<AnalysisResultData | null>(null);
   const [isStreamingAnalysis, setIsStreamingAnalysis] = useState<boolean>(false);
   const [isPaused, setIsPaused] = useState<boolean>(false);
@@ -98,6 +101,16 @@ export default function CameraModal() {
           setLiveResult(result);
           setIsPaused(true);
 
+          // Create conversation and redirect
+          if (user) {
+            const conversationId = await createConversation(user.uid);
+            const analysisText = "Here is your live analysis result.";
+            await addMessage(conversationId, user.uid, analysisText, 'ai', result);
+            setShowCamera(false);
+            router.push(`/chat/${conversationId}`);
+          }
+
+
         } catch (err: unknown) {
           if (err instanceof Error) {
             setError(`Network error during analysis: ${err.message}`);
@@ -105,7 +118,7 @@ export default function CameraModal() {
         }
       }, 'image/jpeg', 0.9);
     }
-  }, [isPaused, cameraStatus, user, tempUserId]);
+  }, [isPaused, cameraStatus, user, tempUserId, router, setShowCamera]);
 
   useEffect(() => {
     let stream: MediaStream | null = null;
@@ -116,8 +129,6 @@ export default function CameraModal() {
         return;
       }
 
-      setCapturedImagePreviewUrl(null);
-      setAnalysisResult(null);
       setLiveResult(null);
       setError(null);
       setIsPaused(false);
@@ -161,7 +172,7 @@ export default function CameraModal() {
           }
         };
 
-        videoRef.current.onerror = (event) => {
+        videoRef.current.onerror = () => {
           setCameraStatus('error');
           setError("Video playback failed. Please check camera permissions or try another browser.");
           setShowCamera(false);
@@ -220,7 +231,7 @@ export default function CameraModal() {
         clearInterval(intervalId);
       }
     };
-  }, [isStreamingAnalysis, isPaused, cameraStatus, user, tempUserId, sendFrameForLiveAnalysis]);
+  }, [isStreamingAnalysis, isPaused, cameraStatus, user, tempUserId, sendFrameForLiveAnalysis, router, setShowCamera]);
 
   const togglePauseResume = () => {
     setIsPaused(prev => !prev);

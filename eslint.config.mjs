@@ -9,9 +9,13 @@ const __dirname = dirname(__filename);
 
 const compat = new FlatCompat({ baseDirectory: __dirname });
 
-export default [
+const eslintConfig = [
+  {
+    ignores: [".next/**"],
+  },
   // Your custom rules
   {
+    files: ["**/*.ts", "**/*.tsx"],
     plugins: {
       "@typescript-eslint": typescriptEslint,
       "@next/next": next
@@ -20,7 +24,8 @@ export default [
       "@typescript-eslint/no-unused-vars": "off",
       "@typescript-eslint/no-explicit-any": "off",
       "react/no-unescaped-entities": "off",
-      "@next/next/no-page-custom-font": "off"
+      "@next/next/no-page-custom-font": "off",
+      "@next/next/no-html-link-for-pages": "error"
     }
   },
   
@@ -31,12 +36,6 @@ export default [
       "next/typescript"
     ]
   }),
-  
-  // Additional Next.js recommended config
-  {
-    files: ["**/*.ts", "**/*.tsx"],
-    rules: {
-      "@next/next/no-html-link-for-pages": "error"
-    }
-  }
 ];
+
+export default eslintConfig;

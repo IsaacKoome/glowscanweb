@@ -50,7 +50,7 @@ interface UserData {
   paystackLastTxRef?: string;
   paystackSubscriptionCode?: string;
   isAnonymous?: boolean; // Add this field to distinguish anonymous users
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 interface AuthContextType {
