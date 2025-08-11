@@ -25,6 +25,7 @@ export default function CameraModal() {
   const [error, setError] = useState<string | null>(null);
   const [cameraStatus, setCameraStatus] = useState<'idle' | 'loading' | 'playing' | 'error'>('idle');
   const [tempUserId, setTempUserId] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState<boolean>(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -43,7 +44,7 @@ export default function CameraModal() {
   }, [authLoading, user, tempUserId]);
 
   const sendFrameForLiveAnalysis = useCallback(async () => {
-    if (isPaused || cameraStatus !== 'playing') {
+    if (isPaused || cameraStatus !== 'playing' || isSaving) {
       return;
     }
 
@@ -101,8 +102,9 @@ export default function CameraModal() {
           setLiveResult(result);
           setIsPaused(true);
 
-          // Create conversation and redirect
-          if (user) {
+          // Create conversation and redirect only if not already saving
+          if (user && !isSaving) {
+            setIsSaving(true); // Prevent multiple saves
             const conversationId = await createConversation(user.uid);
             const analysisText = "Here is your live analysis result.";
             await addMessage(conversationId, user.uid, analysisText, 'ai', result);
@@ -118,7 +120,7 @@ export default function CameraModal() {
         }
       }, 'image/jpeg', 0.9);
     }
-  }, [isPaused, cameraStatus, user, tempUserId, router, setShowCamera]);
+  }, [isPaused, cameraStatus, user, tempUserId, router, setShowCamera, isSaving]);
 
   useEffect(() => {
     let stream: MediaStream | null = null;
@@ -231,7 +233,7 @@ export default function CameraModal() {
         clearInterval(intervalId);
       }
     };
-  }, [isStreamingAnalysis, isPaused, cameraStatus, user, tempUserId, sendFrameForLiveAnalysis, router, setShowCamera]);
+  }, [isStreamingAnalysis, isPaused, cameraStatus, user, tempUserId, sendFrameForLiveAnalysis]);
 
   const togglePauseResume = () => {
     setIsPaused(prev => !prev);
