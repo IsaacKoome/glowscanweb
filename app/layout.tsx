@@ -39,7 +39,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   href="/"
                   className="text-3xl font-extrabold text-white mb-2 sm:mb-0 hover:opacity-90 transition-opacity"
                 >
-                  WonderJoy AI ✨
+                  WonderJoy AI - komecon ✨
                 </Link>
                 <HeaderNavClient /> {/* This component now handles all primary navigation */}
               </div>
