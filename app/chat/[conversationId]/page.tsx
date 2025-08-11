@@ -26,7 +26,7 @@ export default function ChatPage({ params }: any) {
   }
 
   return (
-    <div className="flex h-screen bg-gray-100">
+    <div className="flex h-screen bg-gray-100 overflow-hidden">
       <Sidebar />
       <ChatView conversationId={params.conversationId} />
     </div>
