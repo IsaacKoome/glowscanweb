@@ -28,7 +28,6 @@ import { db, storage } from "@/lib/firebase";
 import { v4 as uuidv4 } from "uuid";
 import { useAuth } from '../context/AuthContext';
 import { useCamera } from '../context/CameraContext';
-
 import { getInitials } from '@/lib/utils';
 import AnalysisResult from './AnalysisResult';
 
@@ -65,8 +64,8 @@ export function ChatView({ conversationId }: ChatViewProps) {
 
   useEffect(() => {
     if (!user || !conversationId) return;
-
     setIsLoadingMessages(true);
+
     const q = query(
       collection(db, messagesCollectionPath),
       orderBy("timestamp", "asc")
@@ -159,9 +158,9 @@ export function ChatView({ conversationId }: ChatViewProps) {
       if (!response.ok) throw new Error(`API Error: ${response.status} - ${await response.text()}`);
 
       const aiResponseData = await response.json();
-      const aiContent = aiResponseData.type === 'analysis_result' ?
-        aiResponseData.overall_summary || "Here's your analysis." :
-        aiResponseData.message || "An AI response was received.";
+      const aiContent = aiResponseData.type === 'analysis_result'
+        ? aiResponseData.overall_summary || "Here's your analysis."
+        : aiResponseData.message || "An AI response was received.";
 
       await addDoc(collection(db, messagesCollectionPath), {
         sender: 'ai',
@@ -174,7 +173,6 @@ export function ChatView({ conversationId }: ChatViewProps) {
       setCurrentMessageText('');
       setSelectedImageFile(null);
       setSelectedVideoFile(null);
-      // Reset file inputs
       (document.getElementById('chatImageUpload') as HTMLInputElement).value = '';
       (document.getElementById('chatVideoUpload') as HTMLInputElement).value = '';
 
@@ -201,13 +199,15 @@ export function ChatView({ conversationId }: ChatViewProps) {
   };
 
   return (
-    <main className="flex-1 flex flex-col bg-gray-100 overflow-hidden">
+    <main className="flex flex-col h-screen bg-gray-100">
+      {/* Header */}
       <header className="bg-white border-b border-gray-200 p-4 flex items-center justify-between z-10">
         <h2 className="text-xl font-bold text-purple-700 flex items-center gap-2">
           <SparklesIcon className="w-6 h-6 text-yellow-400" /> WonderJoy AI Analyst
         </h2>
       </header>
 
+      {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 md:p-6 custom-scrollbar">
         {isLoadingMessages ? (
           <div className="flex justify-center items-center h-full">
@@ -221,38 +221,37 @@ export function ChatView({ conversationId }: ChatViewProps) {
                   <Image src="/images/wonderjoy-ai-avatar.png" alt="AI" width={32} height={32} className="rounded-full border-2 border-purple-400" />
                 )}
                 <div className={`flex flex-col max-w-[80%] p-3 rounded-xl shadow-sm ${msg.sender === 'user' ? 'bg-purple-600 text-white rounded-br-none' : 'bg-gray-200 text-gray-800 rounded-bl-none'}`}>
-                  {/* Message content rendering logic here, adapted from original page */}
-                   {msg.type === 'text' && msg.content && (
-                  <p className="text-sm whitespace-pre-wrap break-words">{msg.content}</p>
-                )}
-                {msg.type === 'image' && msg.mediaUrl && (
-                  <div className="relative w-48 h-32 md:w-64 md:h-48 rounded-lg overflow-hidden border border-gray-300 mb-1">
-                    <Image
-                      src={msg.mediaUrl}
-                      alt="User uploaded image"
-                      fill
-                      className="object-cover"
-                      sizes="(max-width: 768px) 100vw, 50vw"
-                    />
-                  </div>
-                )}
-                {msg.type === 'video' && msg.mediaUrl && (
-                  <div className="relative w-48 h-32 md:w-64 md:h-48 rounded-lg overflow-hidden border border-gray-300 mb-1 bg-black flex items-center justify-center">
-                    <video
-                      src={msg.mediaUrl}
-                      controls
-                      className="w-full h-full object-contain"
-                      aria-label="Shared video"
-                      preload="metadata"
-                    />
-                  </div>
-                )}
-                {msg.type === 'analysis_result' && msg.analysisData && (
-                  <div className="bg-purple-100 p-3 rounded-lg mt-2 text-purple-800 border border-purple-200">
-                    <h4 className="font-bold mb-1">Live Analysis Result:</h4>
-                    <AnalysisResult result={msg.analysisData} />
-                  </div>
-                )}
+                  {msg.type === 'text' && msg.content && (
+                    <p className="text-sm whitespace-pre-wrap break-words">{msg.content}</p>
+                  )}
+                  {msg.type === 'image' && msg.mediaUrl && (
+                    <div className="relative w-48 h-32 md:w-64 md:h-48 rounded-lg overflow-hidden border border-gray-300 mb-1">
+                      <Image
+                        src={msg.mediaUrl}
+                        alt="User uploaded image"
+                        fill
+                        className="object-cover"
+                        sizes="(max-width: 768px) 100vw, 50vw"
+                      />
+                    </div>
+                  )}
+                  {msg.type === 'video' && msg.mediaUrl && (
+                    <div className="relative w-48 h-32 md:w-64 md:h-48 rounded-lg overflow-hidden border border-gray-300 mb-1 bg-black flex items-center justify-center">
+                      <video
+                        src={msg.mediaUrl}
+                        controls
+                        className="w-full h-full object-contain"
+                        aria-label="Shared video"
+                        preload="metadata"
+                      />
+                    </div>
+                  )}
+                  {msg.type === 'analysis_result' && msg.analysisData && (
+                    <div className="bg-purple-100 p-3 rounded-lg mt-2 text-purple-800 border border-purple-200">
+                      <h4 className="font-bold mb-1">Live Analysis Result:</h4>
+                      <AnalysisResult result={msg.analysisData} />
+                    </div>
+                  )}
                   <span className={`text-xs mt-1 ${msg.sender === 'user' ? 'text-purple-200' : 'text-gray-500'} text-right`}>
                     {msg.timestamp?.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </span>
@@ -291,6 +290,7 @@ export function ChatView({ conversationId }: ChatViewProps) {
         )}
       </div>
 
+      {/* Input field pinned to bottom */}
       <div className="p-4 bg-white border-t border-gray-200 z-10">
         <form onSubmit={handleSendMessage} className="flex flex-col gap-2">
           {(selectedImageFile || selectedVideoFile) && (
@@ -322,4 +322,3 @@ export function ChatView({ conversationId }: ChatViewProps) {
     </main>
   );
 }
-
