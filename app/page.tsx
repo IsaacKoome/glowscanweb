@@ -6,7 +6,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import AnalysisResult from '../components/AnalysisResult';
 import { useAuth } from '../context/AuthContext';
-import { useCamera } from  '..context/CameraContext' // 👈 NEW: Import CameraContext
+import { useCamera } from  '../context/CameraContext' // 👈 NEW: Import CameraContext
 
 export default function HomePage() {
   const { user, loading: authLoading } = useAuth();
