@@ -169,14 +169,13 @@ export default function HomePage() {
       setCameraStatus('idle');
     };
   }, [showCamera, closeCamera]);
-
   // --- Live Analysis Interval ---
   useEffect(() => {
     let intervalId: NodeJS.Timeout | undefined;
     if (isStreamingAnalysis && cameraStatus === 'playing' && !isPaused && (user || tempUserId)) {
       intervalId = setInterval(() => {
         sendFrameForLiveAnalysis();
-      }, 3000);
+      }, 1000); // faster interval
     }
     return () => {
       if (intervalId) clearInterval(intervalId);
@@ -184,6 +183,25 @@ export default function HomePage() {
   }, [isStreamingAnalysis, isPaused, cameraStatus, user, tempUserId, sendFrameForLiveAnalysis]);
 
   const togglePauseResume = () => setIsPaused(prev => !prev);
+
+  {/* --- Live Analysis Insights Box --- */}
+  {isStreamingAnalysis && (
+    <div className="flex flex-col flex-1 bg-purple-50 rounded-xl shadow-inner text-purple-800 p-4 overflow-y-auto flex-shrink-0">
+      <h3 className="text-lg font-semibold mb-3 text-center">Live Skin Insights</h3>
+      {liveResult ? (
+        <AnalysisResult result={liveResult} />
+      ) : (
+        // 🔥 Skeleton Loader
+        <div className="animate-pulse space-y-4">
+          <div className="h-4 bg-purple-200 rounded w-3/4 mx-auto"></div>
+          <div className="h-3 bg-purple-200 rounded w-1/2 mx-auto"></div>
+          <div className="h-3 bg-purple-200 rounded w-5/6 mx-auto"></div>
+          <div className="h-3 bg-purple-200 rounded w-2/3 mx-auto"></div>
+          <div className="h-4 bg-purple-200 rounded w-1/3 mx-auto"></div>
+        </div>
+      )}
+    </div>
+  )}
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[calc(100vh-128px)] bg-gradient-to-br from-pink-50 via-purple-50 to-blue-50 p-6 text-center">
