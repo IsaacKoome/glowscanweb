@@ -253,7 +253,12 @@ export default function HomePage() {
                 )}
               </div>
             </div>
-           
+             {isStreamingAnalysis && (
+              <div className="flex flex-col flex-1 bg-purple-50 rounded-xl shadow-inner p-4 overflow-y-auto">
+                <h3 className="text-lg font-semibold mb-1 text-center">Live Skin Insights</h3>
+                {liveResult ? <AnalysisResult result={liveResult} /> : <p className="text-center">Analyzing live... 🔄</p>}
+              </div>
+            )}
           </div>
         </div>
       )}
