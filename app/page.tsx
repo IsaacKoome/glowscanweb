@@ -65,7 +65,7 @@ export default function HomePage() {
         const formData = new FormData();
         formData.append('file', new File([blob], "live_frame.jpg", { type: "image/jpeg" }));
 
-        const API_ENDPOINT = 'https://glowscan-backend-241128138627.us-central1.run.app/predict';
+        const API_ENDPOINT = 'https://glowscanweb-1.onrender.com/predict';
 
         try {
           const response = await fetch(API_ENDPOINT, {
