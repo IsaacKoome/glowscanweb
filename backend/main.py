@@ -47,7 +47,7 @@ try:
     GOOGLE_API_KEY = os.environ["GEMINI_API_KEY"]
     configure(api_key=GOOGLE_API_KEY)
     # We only need one model instance for all tasks
-    gemini_model = GenerativeModel("gemini-1.5-flash")
+    gemini_model = GenerativeModel("gemini-2.5-flash")
     print("Gemini AI Model configured successfully.")
 except KeyError:
     print("CRITICAL WARNING: GEMINI_API_KEY environment variable not set. AI features will not work.")
