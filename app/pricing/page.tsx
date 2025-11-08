@@ -116,7 +116,7 @@ export default function PricingPage() {
     }
 
     try {
-      const response = await fetch('https://glowscan-backend-241128138627.us-central1.run.app/create-paystack-payment', {
+      const response = await fetch('https://glowscanweb-1.onrender.com/create-paystack-payment', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
