@@ -15,22 +15,10 @@ interface Plan {
 }
 
 const plans: Plan[] = [
-  {
-    id: 'free',
-    name: 'Free Plan',
-    price: '$0',
-    priceDetails: 'per month',
-    features: [
-      '3 analyses per day (Fast AI Model)', // Updated
-      'Basic skin & makeup insights',
-      'Access to community tips',
-      'No credit card required'
-    ],
-    paystackPlanCode: null,
-  },
+
   {
     id: 'basic',
-    name: 'Basic Plan',
+    name: 'PRO Plan',
     price: '$5', // Updated to USD
     priceDetails: 'per month',
     features: [
@@ -38,42 +26,15 @@ const plans: Plan[] = [
       '10 analyses per day (Fast AI Model)', // Updated
       'Advanced skin & makeup insights',
       'Priority email support',
-      'Ad-free experience'
+      'Ad-free experience',
+      '24/7 priority support',
+      'Personalized beauty consultations',
+      'Early access to new features',
     ],
     buttonText: 'Choose Basic',
     paystackPlanCode: "PLN_s7gnbckddqplh9e",
   },
-  {
-    id: 'standard',
-    name: 'Standard Plan',
-    price: '$20', // Updated to USD
-    priceDetails: 'per month',
-    features: [
-      '10 analyses per day (Our Best AI Model)', // Updated
-      'Unlimited analyses (Fast AI Model)', // Updated
-      'Detailed personalized reports',
-      'Dedicated chat support',
-      'Early access to new features'
-    ],
-    buttonText: 'Choose Standard',
-    isPopular: true,
-    paystackPlanCode: "PLN_fv2x1v23kup2w0f",
-  },
-  {
-    id: 'premium',
-    name: 'Premium Plan',
-    price: '$100', // Updated to USD
-    priceDetails: 'per month',
-    features: [
-      'Unlimited analyses from our best model', // Updated for consistency
-      'Unlimited analyses (Fast AI Model)', // Updated
-      'Exclusive expert webinars',
-      '24/7 priority support',
-      'Personalized beauty consultations'
-    ],
-    buttonText: 'Choose Premium',
-    paystackPlanCode: "PLN_ugyl1iiqo5vn4g3",
-  },
+
 ];
 
 export default function PricingPage() {
